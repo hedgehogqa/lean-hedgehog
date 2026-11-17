@@ -1,5 +1,5 @@
 QUICK START
-    Add the package to lakefile.toml (see README), then:
+    Add the package to lakefile.toml (see README.md), then:
 
         import Hedgehog
         open Hedgehog
