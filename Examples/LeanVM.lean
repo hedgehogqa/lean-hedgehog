@@ -3,13 +3,12 @@ import Hedgehog
 /-!
 # Three bugs, over-simplified from leanVM
 
-The examples of `README.md`, word for word: a size on the wire, a memory
-whose cells are written once, and a program counter.  `lake exe
-examples` runs them, and `HedgehogTest/Readme.lean` checks what they
-shrink to.  Change them here and in `README.md` together.
+A size on the wire, a memory whose cells are written once, and a
+program counter.  `lake exe examples` runs them, and
+`HedgehogTest/LeanVM.lean` checks what they shrink to.
 
 They are declared at the top level, with no namespace, so that a report
-names `Op.set` as the README shows it.
+names `Op.set` and nothing longer.
 
 ## What stands in for what
 

@@ -14,7 +14,7 @@ in `lean-toolchain`.
   Each module's docstring says what it is and why it differs from the
   Haskell.
 - `HedgehogTest.lean`, `HedgehogTest/`: the tests and their driver.
-- `Examples.lean`, `Examples/`: the examples of `README.md`, runnable.
+- `Examples.lean`, `Examples/`: the examples and their driver.
 - `README.md`: what the library is.  `USAGE`: the guide.  `NEWS`: the
   user-visible changes.  `COPYING`: the license.
 
@@ -23,7 +23,7 @@ in `lean-toolchain`.
     lake build              # Build the library.
     lake test               # Run every check.
     MADHOUSE=1 lake test    # The scenario check, and only it, must fail.
-    lake exe examples       # Run the README's examples; each finds a bug.
+    lake exe examples       # Run the examples; each finds a bug.
 
 ## Rules
 
@@ -31,8 +31,7 @@ in `lean-toolchain`.
 - Every public definition has a check in `HedgehogTest/`.  A generator
   has two: what it generates, and what it shrinks to.
 - An example in `README.md` or `USAGE` is compiled against the library
-  before it is committed.  Those of the README's Counterexamples section
-  are `Examples/LeanVM.lean`, word for word; change both together.
+  before it is committed.
 - A user-visible change has a line in `NEWS`, and `USAGE` says how to
   use it.
 - No `sorry`, `axiom`, `unsafe`, `implemented_by` or `native_decide`.

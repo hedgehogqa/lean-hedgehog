@@ -1,10 +1,10 @@
 import Examples.LeanVM
 
 /-!
-What the examples of `README.md`, in `Examples/LeanVM.lean`, shrink to.
+What the examples of `Examples/LeanVM.lean` shrink to.
 -/
 
-namespace HedgehogTest.Readme
+namespace HedgehogTest.LeanVM
 
 open Hedgehog
 
@@ -45,7 +45,7 @@ def facts : List (String × Bool) := [
     ((program .deterministic).report (Seed.ofNat i)).ok),
   ("madhouse shrinks to a jump and the steps that leave",
     finds (program .madhouse) smallest),
-  ("the report of the README",
+  ("the report of a size past two bytes",
     ((sizeRoundTrips.report (Seed.ofNat 0)).render "size round trips")
       == "  ✗ size round trips failed after 2 tests and 16 shrinks.\n\n    \
           forAll 65536\n    === failed\n      lhs: some 0\n      \
@@ -54,4 +54,4 @@ def facts : List (String × Bool) := [
           > recheck 1 ⟨4446439630527111738, 15321243935405834545⟩ \
           <property>")]
 
-end HedgehogTest.Readme
+end HedgehogTest.LeanVM
