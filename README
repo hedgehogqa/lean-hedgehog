@@ -73,6 +73,28 @@ SEE ALSO
 LICENSE
     BSD-3-Clause, as Haskell Hedgehog; see COPYING.
 
+AI FULL DISCLOSURE
+    This software is developed with strong assistance from AI coding
+    agents, with humans leading the ideas and the direction.  We say
+    this openly because it shaped how the project was built.  If you
+    are not happy with AI-developed code, this software is not for
+    you.
+
+    The agents did not bring the ideas.  The author(s) have been
+    around property-based testing for a decade, fsharp-hedgehog
+    included; "Write you some QuickCheck" is from 2016:
+
+        https://blog.nikosbaxevanis.com/2016/02/08/write-you-some-quickcheck/
+
+    Above all, the design is Jacob Stanley's.  His talk "Gens N' Roses:
+    Appetite for Reduction" (YOW! 2017) explains integrated shrinking
+    better than any document here, and is the place to start:
+
+        https://www.youtube.com/watch?v=LfD0DHqpeVQ
+
+    The acknowledgement below is equally important: this would not
+    exist without Haskell Hedgehog, written by hand.
+
 IN MEMORY OF JACOB STANLEY
     This library is a tribute to Jacob Stanley, author and co-founder
     of Hedgehog.
