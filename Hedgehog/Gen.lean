@@ -55,6 +55,9 @@ protected def bind (g : Gen α) (k : α → Gen β) : Gen β :=
       | none => .singleton none
       | some x => (k x).run size s2⟩
 
+instance : Inhabited (Gen α) :=
+  ⟨discard⟩
+
 instance : Monad Gen where
   pure := Gen.pure
   map := Gen.map
@@ -170,9 +173,15 @@ def frequency (gs : List (Nat × Gen α)) : Gen α := do
     | n, (k, g) :: gs => if n ≤ k then g else pick (n - k) gs
   pick n gs
 
+/-- A generator that is built when it runs.  Lean is strict, so a
+generator that refers to itself must do so through `delay`. -/
+def delay (f : Unit → Gen α) : Gen α :=
+  ⟨fun size seed => (f ()).run size seed⟩
+
 /-- Choose among `leaves` at size 1 or less, and among both lists
 otherwise, with the generators of `nodes` run at a smaller size.  This is
-what keeps a recursive generator finite. -/
+what keeps a recursive generator finite; the recursive references in
+`nodes` go through `delay`. -/
 def recursive (f : List (Gen α) → Gen α) (leaves nodes : List (Gen α)) :
     Gen α :=
   sized fun size =>

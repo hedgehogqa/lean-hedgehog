@@ -31,7 +31,8 @@ def units : List (String × Bool) := [
   ("exponentialFrom at 99",
     (Range.exponentialFrom (0 : Int) (-128) 512).bounds 99 == (-128, 512)),
   ("split differs", let (a, b) := (Seed.ofNat 1).split; a != b),
-  ("seeds repeat", (Seed.ofNat 1).nextNat 0 1000 == (Seed.ofNat 1).nextNat 0 1000)]
+  ("seeds repeat",
+    (Seed.ofNat 1).nextNat 0 1000 == (Seed.ofNat 1).nextNat 0 1000)]
 
 def reverseReverse : Property Id := property do
   let xs ← forAll (Gen.list (.linear 0 100) Gen.alpha)
@@ -111,7 +112,8 @@ def allBelow500 : Property Id := property do
   ensure (xs.all (· < 500))
 
 def notBothLarge : Property Id := property do
-  let (x, y) ← forAll (Gen.zip (Gen.nat (.linear 0 100)) (Gen.nat (.linear 0 100)))
+  let n := Gen.nat (.linear 0 100)
+  let (x, y) ← forAll (Gen.zip n n)
   ensure (x < 30 || y < 30)
 
 def alwaysDiscards : Property Id := property do
