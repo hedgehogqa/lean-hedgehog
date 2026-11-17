@@ -8,6 +8,7 @@ public import Hedgehog.Gen
 public import Hedgehog.Property
 public import Hedgehog.Runner
 public import Hedgehog.StateMachine
+public import Hedgehog.Command
 
 /-!
 # Hedgehog
@@ -21,4 +22,5 @@ USAGE is the guide.
 - `Hedgehog.Property`: `forAll`, `===`, `ensure`, `annotate`.
 - `Hedgehog.Runner`: `check`, `recheck`, reports.
 - `Hedgehog.StateMachine`: model-based testing, transitions as one type.
+- `Hedgehog.Command`: model-based testing, commands as open types.
 -/
