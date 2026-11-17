@@ -60,14 +60,17 @@ GENERATORS
         map (<$>) and bind (do notation) as usual.  Gen.zip and
         Gen.zipWith combine generators that do not depend on each
         other, and shrink better than bind: after one side shrank, the
-        other still can.
+        other still can.  After bind, a shrink of the first value
+        draws the second again, so the first may stop short of its
+        origin: where the second, drawn again, no longer fails.
 
     Conditions
         Gen.filter keeps the values that satisfy a predicate and
         Gen.filterMap those a function maps to some.  Both retry at
         growing sizes and discard after a hundred tries; Gen.discard
-        discards at once.  Prefer a generator that is right by
-        construction.
+        discards at once.  A filtered number shrinks only through
+        values the filter keeps, so it may stop above the least one.
+        Prefer a generator that is right by construction.
 
     Size
         Gen.sized reads the size, Gen.resize and Gen.scale set it, and
