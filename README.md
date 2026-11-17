@@ -39,6 +39,7 @@ counterexample.
 
 The examples are over-simplified from [leanVM][leanvm]: a size on the
 wire, a memory whose cells are written once, and a program counter.
+Each has a bug put there to be found; `lake exe examples` runs them.
 
 [leanvm]: https://github.com/leanEthereum/leanVM
 

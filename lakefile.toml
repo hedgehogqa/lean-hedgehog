@@ -5,7 +5,7 @@ keywords = ["testing", "property-based-testing", "shrinking"]
 homepage = "https://github.com/hedgehogqa/lean-hedgehog"
 license = "BSD-3-Clause"
 licenseFiles = ["COPYING"]
-defaultTargets = ["Hedgehog"]
+defaultTargets = ["Hedgehog", "examples"]
 testDriver = "hedgehogTest"
 
 [leanOptions]
@@ -21,3 +21,10 @@ name = "HedgehogTest"
 [[lean_exe]]
 name = "hedgehogTest"
 root = "HedgehogTest"
+
+[[lean_lib]]
+name = "Examples"
+
+[[lean_exe]]
+name = "examples"
+root = "Examples"

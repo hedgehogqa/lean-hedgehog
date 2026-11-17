@@ -12,3 +12,6 @@ jobs:
       - uses: actions/checkout@v4
       # Builds the library and runs `lake test`.
       - uses: leanprover/lean-action@v1
+      # Each example has a bug and must find it, in both modes.
+      - run: lake exe examples
+      - run: MADHOUSE=1 lake exe examples
