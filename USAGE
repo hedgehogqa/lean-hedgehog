@@ -1,0 +1,378 @@
+QUICK START
+    Add the package to lakefile.toml (see README), then:
+
+        import Hedgehog
+        open Hedgehog
+
+        def reverseReverse : Property Id := property do
+          let xs ← forAll (Gen.list (.linear 0 100) Gen.alpha)
+          xs.reverse.reverse === xs
+
+        #eval check reverseReverse "reverse reverse"
+
+    check prints "✓ reverse reverse passed 100 tests." and, when the
+    property fails, throws the report: the #eval is then an error and
+    the build fails.
+
+    A file that begins with "module" needs the library at compile time
+    to run #eval, so it imports it twice:
+
+        public import Hedgehog
+        meta import Hedgehog
+
+GENERATORS
+    A Gen α makes a value of α together with its shrinks.  Gen is a
+    monad, so generators compose in do notation, and the composition
+    shrinks with no further work:
+
+        structure Point where
+          x : Int
+          y : Int
+          deriving Repr, BEq
+
+        def genPoint : Gen Point := do
+          let x ← Gen.int (.linearFrom 0 (-100) 100)
+          let y ← Gen.int (.linearFrom 0 (-100) 100)
+          pure ⟨x, y⟩
+
+    Numbers
+        Gen.nat, Gen.int and Gen.integral (Fin, UInt8 to UInt64, Char)
+        take a Range and shrink to its origin by binary search.
+        Gen.bool shrinks to false.
+
+    Characters and strings
+        Gen.lower, upper, digit, alpha, alphaNum, ascii, unicode, and
+        Gen.char for a range.  Gen.string takes a length and a
+        character generator.
+
+    Collections
+        Gen.list and Gen.array take a length range and an element
+        generator.  A list shrinks by losing elements, then by
+        shrinking them.  Gen.sequence takes a list of generators.
+        Gen.subsequence and Gen.shuffle take a list.
+
+    Choice
+        Gen.element picks a value, Gen.choice a generator, and
+        Gen.frequency a generator by weight; all shrink to the first.
+        Gen.option makes none now and then.
+
+    Combination
+        map (<$>) and bind (do notation) as usual.  Gen.zip and
+        Gen.zipWith combine generators that do not depend on each
+        other, and shrink better than bind: after one side shrank, the
+        other still can.
+
+    Conditions
+        Gen.filter keeps the values that satisfy a predicate and
+        Gen.filterMap those a function maps to some.  Both retry at
+        growing sizes and discard after a hundred tries; Gen.discard
+        discards at once.  Prefer a generator that is right by
+        construction.
+
+    Size
+        Gen.sized reads the size, Gen.resize and Gen.scale set it, and
+        Gen.small reduces it.
+
+    Shrinking
+        Gen.shrink adds shrinks to a generator and Gen.prune removes
+        them all.  Neither is needed in ordinary use.
+
+    To look at a generator, sample it or draw its shrink tree:
+
+        #eval Gen.sample genPoint
+        #eval IO.println ((Gen.int (.constant 0 10)).render 30 (.ofNat 1) 3)
+
+        9
+          0
+          5
+            3
+              2
+            4
+          7
+            6
+          8
+
+    The runner tries the children of a failing value in order and
+    descends into the first that fails, so for 9 it tries 0, then 5,
+    7 and 8.
+
+RECURSIVE GENERATORS
+    Lean is strict, so a generator cannot simply mention itself.
+    Recurse on a depth and take the depth from the size:
+
+        inductive Expr where
+          | lit (n : Nat)
+          | add (a b : Expr)
+          deriving Repr
+
+        def genExprOf : (depth : Nat) → Gen Expr
+          | 0 => Expr.lit <$> Gen.nat (.linear 0 9)
+          | depth + 1 => Gen.choice [
+              Expr.lit <$> Gen.nat (.linear 0 9),
+              Gen.zipWith Expr.add (genExprOf depth) (genExprOf depth)]
+
+        def genExpr : Gen Expr :=
+          Gen.sized fun size => genExprOf size.log2
+
+    This is total.  Gen.recursive, as in Haskell, is there too; its
+    recursive references go through Gen.delay, in a partial def:
+
+        partial def genExpr' (_ : Unit) : Gen Expr :=
+          Gen.recursive Gen.choice
+            [Expr.lit <$> Gen.nat (.linear 0 9)]
+            [Gen.zipWith Expr.add (Gen.delay genExpr') (Gen.delay genExpr')]
+
+RANGES
+    A test runs at a size from 0 to 99.  The runner starts at 0 and
+    adds one for each test, so early tests are small.  A Range says
+    what the size means for a number or a length:
+
+        Range.singleton x           always x
+        Range.constant x y          x to y at every size
+        Range.linear x y            x to a bound that grows to y
+        Range.exponential x y       the same, on a logarithmic scale
+
+    Each has a From variant, such as Range.linearFrom z x y, with
+    bounds that grow from z in both directions.  Values shrink to the
+    origin: x, or z in the From variants.
+
+    Range.exponential is computed in integers and is exact for
+    bounds of any magnitude, such as 2 ^ 256.
+
+PROPERTIES
+    A property is a do block in PropertyM:
+
+        def sorted : Property Id := (property do
+          let xs ← forAll (Gen.list (.linear 0 50) (Gen.nat (.linear 0 100)))
+          let ys := xs.mergeSort
+          annotate s!"sorted: {ys}"
+          ys.length === xs.length
+          ensure (ys.zip (ys.drop 1) |>.all fun (a, b) => a ≤ b)
+            "out of order").withTests 500
+
+    forAll g
+        Draw a value and log it; it needs Repr.  forAllWith takes the
+        function that shows the value.
+
+    x === y, x /== y
+        Fail unless the two are equal, or differ, by BEq; the report
+        shows both.
+
+    ensure b "message"
+        Fail unless b.  This is Haskell's assert; in Lean, assert is a
+        keyword of do blocks.
+
+    annotate "text"
+        Add a line to the report of a failure.
+
+    tripping x encode decode
+        Fail unless decode (encode x) is pure x, for a decoder into
+        Option, Except or another applicative.
+
+    failure, failWith "message", success, discard
+        End the test.
+
+    withTests, withDiscards and withShrinks set the number of tests
+    (100), the discards after which the runner gives up (100), and the
+    shrinks after which it reports what it has (1000).
+
+EFFECTS
+    Generators are pure.  A property whose test has effects generates
+    first and returns the test, a TestT m Unit, which the runner runs
+    in m for the test case and again for each shrink it tries:
+
+        def fileRoundTrip : Property IO := propertyM do
+          let s ← forAll (Gen.string (.linear 0 100) Gen.alphaNum)
+          pure do
+            let path : System.FilePath := "/tmp/hedgehog-usage.txt"
+            evalIO (IO.FS.writeFile path s)
+            (← evalIO (IO.FS.readFile path)) === s
+
+    evalIO turns an exception into a failure of the test.  The
+    assertions above work in TestT m for any monad m.
+
+RUNNING
+    check p "name"
+        Check the property on a random seed, print the report, and
+        throw if it did not pass.  With (seed := some (.ofNat 0)) the
+        run is the same every time.
+
+    recheck size seed p
+        Run again the one test case that a failure report names.
+
+    checkGroup "name" [("one", p), ("two", q)]
+        Check each property, print each report, and return whether
+        all passed.  For a test executable:
+
+            def main : IO UInt32 := do
+              let ok ← checkGroup "lists" [
+                ("reverse reverse", reverseReverse),
+                ("sorted", sorted)]
+              pure (if ok then 0 else 1)
+
+    p.report seed
+        The Report as a value, in the property's monad.  For a
+        Property Id it is pure, so a property can be a #guard:
+
+            #guard (reverseReverse.report (.ofNat 0)).ok
+
+    In a test library that is checked while it compiles, give check a
+    seed: Lake builds a file once, and a fixed seed makes that build
+    say the same thing everywhere.
+
+STATE MACHINES, TRANSITIONS AS ONE TYPE
+    A Model is a pure reference: a state σ, a transition type τ, a
+    generator of the transitions possible in a state, and apply.  A
+    StateMachine extends it with the system under test.
+
+        structure Counter where
+          value : Int
+          max : Int
+          deriving Repr
+
+        inductive Transition where
+          | inc
+          | dec
+          | reset
+          deriving Repr, BEq
+
+        def model : Model Counter Transition where
+          initState := pure ⟨0, 3⟩
+          transitions _ := Gen.element [.inc, .dec, .reset]
+          apply s
+            | .inc =>
+              if s.value < s.max then { s with value := s.value + 1 } else s
+            | .dec => { s with value := s.value - 1 }
+            | .reset => { s with value := 0 }
+
+        def machine : StateMachine Counter Transition (IO.Ref Int) IO where
+          toModel := model
+          initSut s := IO.mkRef s.value
+          applySut sut s t := do
+            match t with
+            | .inc => sut.modify fun n => if n ≥ s.max then n else n + 1
+            | .dec => sut.modify (· - 1)
+            | .reset => sut.set 0
+            pure sut
+          invariants sut s := do
+            (← sut.get) === s.value
+
+        #eval check machine.property "counter agrees with its model"
+
+    The model state that applySut and invariants receive is the one
+    after the transition.  preconditions, true by default, says when a
+    transition may run; teardown releases the system after a passing
+    sequence.  machine.property takes the range of sequence lengths,
+    1 to 50 by default.
+
+    A failing sequence shrinks by losing transitions and by shrinking
+    each one, and shrinks that break a precondition are dropped.  A
+    system that counts past max is reported as four increments.
+
+    All transitions are in one type, and apply and applySut match on
+    it.  A new operation edits the type and both functions, and Lean
+    rejects a match that misses it.  This is the right design while
+    one person can hold the operations in their head.
+
+STATE MACHINES, COMMANDS AS TYPES
+    Here each command is a type of its own with a Command instance.
+    The instance names the state, the context commands are built
+    from, and the monad of effects:
+
+        structure State where
+          value : Nat := 0
+          deriving Repr, Inhabited
+
+        structure Context where
+          maxIncrement : Nat
+
+        structure Increment where
+          amount : Nat
+
+        instance : Command Increment State Context Id where
+          check _ _ := true
+          apply c s := do
+            let s := { s with value := s.value + c.amount }
+            ensure (s.value ≤ 100) s!"counter exceeded 100: {s.value}"
+            pure s
+          label c := s!"INCREMENT({c.amount})"
+          build ctx := Increment.mk <$> Gen.nat (.constant 1 ctx.maxIncrement)
+
+        structure Reset where
+
+        instance : Command Reset State Context Id where
+          check _ s := s.value > 0
+          apply _ s := pure { s with value := 0 }
+          label _ := "RESET"
+          build _ := pure {}
+
+    check is the precondition, apply runs the command and asserts,
+    label shows it, and build generates it.  A system under test is
+    driven from apply, in IO or another monad, through a handle kept
+    in the state or the context.
+
+    A scenario lists commands.  Command.gen names a command type to
+    generate; Command.fixed takes a command as it is:
+
+        def counter (mode : Mode) : Property Id :=
+          scenario mode (Context.mk 50) [
+            Command.gen Increment,
+            Command.gen Reset,
+            Command.fixed (Increment.mk 42)]
+
+        def main : IO UInt32 := do
+          let ok ← checkGroup "counter" [
+            ("stays within 100", counter (← Mode.fromEnv))]
+          pure (if ok then 0 else 1)
+
+    The scenario starts from the default state (Inhabited) and skips
+    a command whose check fails.
+
+    Mode.deterministic
+        One test: each command once, in the order given.  This is the
+        scripted test, and the mode Mode.fromEnv gives by default.
+
+    Mode.madhouse
+        A hundred tests, each a random sequence of 1 to 15 commands
+        drawn from the list.  Mode.fromEnv gives it when the
+        environment has MADHOUSE=1.
+
+    The scenario above passes in order and fails in madhouse mode:
+
+        $ MADHOUSE=1 lake test
+          ✗ counter stays within 100 failed after 34 tests and 3 shrinks.
+
+            forAll [INCREMENT(36), INCREMENT(42), INCREMENT(23)]
+            executed INCREMENT(36)
+            executed INCREMENT(42)
+            executed INCREMENT(23)
+            counter exceeded 100: 101
+
+    Nothing lists all commands: a third command is a new structure
+    and a new instance, in a file of its own if you like, and neither
+    Increment nor Reset changes.  This is the design for a suite that
+    many people add to.
+
+DIFFERENCES FROM HASKELL HEDGEHOG
+    - Gen is pure where Haskell has GenT m.  A tree with a monad under
+      each node is not strictly positive in the monad, so Lean rejects
+      the type.  Effects go in the test (EFFECTS, above).
+    - Tree is a total inductive type with suspended children, and
+      LawfulMonad Tree is proved rather than tested.  Tree.unfold,
+      Tree.interleave and Tree.zipForest are partial, since their
+      termination depends on the shrink functions they are given.
+    - A discard is a value in the tree, where Haskell prunes with
+      MaybeT.
+    - assert is ensure.
+    - Range.exponential uses integer roots, not floating point.
+    - State machine testing follows proptest-state-machine and
+      madhouse-rs, not Hedgehog's Command with symbolic variables.
+    - Not ported yet: see NEWS.
+
+DEVELOPMENT
+        lake build              # Build the library.
+        lake test               # Run the tests.
+        MADHOUSE=1 lake test    # The scenario test must now fail.
+
+    The toolchain is pinned in lean-toolchain.  The version is in
+    lakefile.toml, and a release is the tag v<version>.

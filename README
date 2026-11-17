@@ -1,6 +1,78 @@
 NAME
     lean-hedgehog - property-based testing for Lean 4
 
+SYNOPSIS
+    import Hedgehog
+    open Hedgehog
+
+    def reverseReverse : Property Id := property do
+      let xs ← forAll (Gen.list (.linear 0 100) Gen.alpha)
+      xs.reverse.reverse === xs
+
+    #eval check reverseReverse "reverse reverse"
+
+DESCRIPTION
+    Hedgehog generates test cases for a property and, when one fails,
+    shrinks it to a small counterexample.  Shrinking is integrated: a
+    generator makes a value together with its shrinks, so there is no
+    shrink function to write, and a shrunk value obeys the invariants
+    of the generator that made it.
+
+    This is a port of Haskell Hedgehog, not a transliteration.  The
+    shrink tree is an ordinary inductive type whose monad laws are
+    proved, generators are pure functions of a size and a seed, and a
+    report is a value that a pure property computes without IO.  The
+    library is written as Lean modules and depends on nothing but Lean.
+
+    A stateful system is tested against a model in one of two ways:
+
+    Hedgehog.StateMachine
+        Transitions are one type and one function applies them, as in
+        Rust's proptest-state-machine.  Closed: Lean checks every match.
+
+    Hedgehog.Command
+        Each command is a type with a Command instance, as in Rust's
+        madhouse-rs.  Open: a new command edits no existing code.  A
+        scenario runs its commands in order, or in random sequences
+        when the environment has MADHOUSE=1.
+
+    A failure looks like this, after shrinking:
+
+      ✗ reverse failed after 3 tests and 4 shrinks.
+
+        forAll [0, 1]
+        === failed
+          lhs: [1, 0]
+          rhs: [0, 1]
+
+        This failure can be reproduced by running:
+        > recheck 2 ⟨13986901307939748530, 11216038023333209809⟩ <property>
+
+INSTALLATION
+    In lakefile.toml, on Lean 4.35.0 or later:
+
+        [[require]]
+        name = "hedgehog"
+        git = "https://github.com/hedgehogqa/lean-hedgehog"
+        rev = "master"
+
+FILES
+    Hedgehog.lean       the library; Hedgehog/ has a module per concept
+    HedgehogTest.lean   the tests, run by lake test
+    img/                the logo
+    USAGE               the guide
+    NEWS                the changes in each release
+    COPYING             the license
+
+SEE ALSO
+    https://github.com/hedgehogqa/haskell-hedgehog, the original.
+    https://github.com/proptest-rs/proptest and
+    https://github.com/stacks-network/madhouse-rs, the two designs for
+    stateful testing.
+
+LICENSE
+    BSD-3-Clause, as Haskell Hedgehog; see COPYING.
+
 IN MEMORY OF JACOB STANLEY
     This library is a tribute to Jacob Stanley, author and co-founder
     of Hedgehog.
@@ -15,6 +87,3 @@ IN MEMORY OF JACOB STANLEY
     deeply felt, but his impact on Hedgehog, and on those who had the
     privilege to work with him, remains.  lean-hedgehog continues that
     work in Lean, in his memory.
-
-SEE ALSO
-    https://github.com/hedgehogqa/haskell-hedgehog, the original.

@@ -1,0 +1,19 @@
+lean-hedgehog NEWS -- history of user-visible changes.
+
+0.1.0 (unreleased)
+
+  - Generators with integrated shrinking: Gen, Range, Seed, Tree.
+    Numbers, booleans, characters, strings, lists, arrays, options,
+    choice, frequency, recursion, filtering, subsequences, shuffles.
+  - Properties: property and propertyM, forAll, ===, /==, ensure,
+    annotate, tripping, discard, evalIO.
+  - A runner: check, recheck, checkGroup, and Property.report, which
+    is a pure function for a pure property.
+  - Hedgehog.StateMachine: model-based testing with transitions as one
+    type, after proptest-state-machine.
+  - Hedgehog.Command: model-based testing with commands as types and a
+    MADHOUSE=1 mode, after madhouse-rs.
+  - LawfulMonad Tree is a theorem.
+  - Not ported yet: coverage (classify, cover, label), symbolic
+    variables and parallel state machine testing, floating-point
+    generators, diffs of the two sides of ===, test discovery.
