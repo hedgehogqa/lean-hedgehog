@@ -1,0 +1,205 @@
+import HedgehogTest.Basic
+
+/-!
+Assertions, the journal, the configuration, and what the runner prints
+and returns.
+-/
+
+namespace HedgehogTest.Runner
+
+open Hedgehog
+
+/-- A pure test's result and journal. -/
+def run {α : Type} (test : TestT Id α) : Except Failure α × Journal :=
+  Id.run (test.run.run #[])
+
+def passes (test : TestT Id Unit) : Bool :=
+  match (run test).1 with
+  | .ok () => true
+  | .error _ => false
+
+/-- The message a pure test fails with. -/
+def message (test : TestT Id Unit) : Option String :=
+  match (run test).1 with
+  | .ok () => none
+  | .error e => some e.message
+
+def assertions : List (String × Bool) := [
+  ("success", passes success),
+  ("failure", message failure == some "failure"),
+  ("failWith", message (failWith "boom") == some "boom"),
+  ("ensure true", passes (ensure true)),
+  ("ensure false", message (ensure false) == some "ensure failed"),
+  ("ensure with a message", message (ensure false "no") == some "no"),
+  ("=== on equal values", passes ((1 : Nat) === 1)),
+  ("=== on different values", message ((1 : Nat) === 2)
+    == some "=== failed\n  lhs: 1\n  rhs: 2"),
+  ("/== on different values", passes ((1 : Nat) /== 2)),
+  ("/== on equal values", message ((1 : Nat) /== 1)
+    == some "/== failed\n  lhs: 1\n  rhs: 1"),
+  ("tripping round trip",
+    passes (tripping (12 : Nat) toString String.toNat?)),
+  ("tripping failure",
+    message (tripping (12 : Nat) (fun _ => "x") String.toNat?)
+      == some "=== failed\n  lhs: none\n  rhs: some 12"),
+  ("annotate", (run (annotate "a" *> annotate "b")).2
+    == #[.note "a", .note "b"]),
+  ("the journal survives a failure",
+    (run (annotate "a" *> failure (α := Unit))).2 == #[.note "a"]),
+  ("a failure ends the test",
+    (run (failure (α := Unit) *> annotate "a")).2 == #[]),
+  ("hang", hang 2 "a\nb\nc" == "a\n  b\n  c")]
+
+def logged : Property Id := property do
+  let n ← forAllWith (fun n => s!"<{n}>") (Gen.nat (.constant 7 7))
+  annotate "after"
+  let m ← forAll (Gen.nat (.constant 8 8))
+  n === m
+
+def counts (ok : Bool) : Property Id := property do
+  let _ ← forAll (Gen.nat (.linear 0 100))
+  ensure ok
+
+def halfDiscarded : Property Id := property do
+  let n ← forAll (Gen.nat (.linear 0 100))
+  if n % 2 == 1 then discard
+
+def large : Property Id := property do
+  let n ← forAll (Gen.nat (.linear 0 1000))
+  ensure (n < 500)
+
+def throws : Property IO := propertyM do
+  pure do
+    evalIO (throw (IO.userError "boom") : IO Unit)
+
+def ioFails : Property IO := propertyM do
+  let n ← forAll (Gen.nat (.linear 0 1000))
+  pure do
+    let r ← IO.mkRef n
+    ensure ((← r.get) < 500)
+
+/-- The sizes the runner uses, in order. -/
+def sizes : List Nat :=
+  (List.range 250).foldl (init := []) fun seen i =>
+    let p : Property Id := property do
+      let size ← forAll (Gen.sized pure)
+      ensure (size != i % 100 || seen.length != i)
+    match (p.withTests (i + 1) |>.report (Seed.ofNat 0)).status with
+    | .failed _ => seen ++ [i % 100]
+    | _ => seen
+
+def failed (r : Report) : Option Counterexample :=
+  match r.status with
+  | .failed c => some c
+  | _ => none
+
+def runner : List (String × Bool) := [
+  ("a hundred tests by default",
+    ((counts true).report (Seed.ofNat 0)).run == ⟨100, 0, .ok⟩),
+  ("withTests", ((counts true).withTests 7 |>.report (Seed.ofNat 0)).run
+    == ⟨7, 0, .ok⟩),
+  ("withTests 0", ((counts false).withTests 0 |>.report (Seed.ofNat 0)).run
+    == ⟨0, 0, .ok⟩),
+  ("a failure stops the run",
+    ((counts false).report (Seed.ofNat 0)).tests == 0),
+  ("discards are counted",
+    let r := (halfDiscarded.report (Seed.ofNat 0)).run
+    r.ok && r.tests == 100 && r.discards > 0),
+  ("withDiscards",
+    let r := (halfDiscarded.withDiscards 3 |>.report (Seed.ofNat 0)).run
+    r.status == .gaveUp && r.discards == 3),
+  ("the journal is in order",
+    (failed (logged.report (Seed.ofNat 0))).map (·.journal)
+      == some #[.input "<7>", .note "after", .input "8"]),
+  ("the failure is kept",
+    (failed (logged.report (Seed.ofNat 0))).map (·.failure.message)
+      == some "=== failed\n  lhs: 7\n  rhs: 8"),
+  ("withShrinks 0 reports the first failure",
+    (List.range 20).all fun i =>
+      (failed (large.withShrinks 0 |>.report (Seed.ofNat i))).any
+        (·.shrinks == 0)),
+  ("withShrinks bounds the shrinks", (List.range 20).all fun i =>
+    (failed (large.withShrinks 2 |>.report (Seed.ofNat i))).any
+      (·.shrinks ≤ 2)),
+  ("shrinks are counted", (List.range 20).all fun i =>
+    (failed (large.report (Seed.ofNat i))).any fun c =>
+      c.journal == #[.input "500"] && c.shrinks > 0),
+  ("the size starts at 0 and wraps after 99",
+    sizes.take 3 == [0, 1, 2] && (sizes.drop 99).take 3 == [99, 0, 1]),
+  ("recheck of a passing case",
+    ((counts true).recheck 10 (Seed.ofNat 0)).run == ⟨1, 0, .ok⟩),
+  ("recheck of a discarded case", (List.range 20).any fun i =>
+    (halfDiscarded.recheck 50 (Seed.ofNat i)).run == ⟨0, 1, .gaveUp⟩),
+  ("different seeds give different cases",
+    (failed (large.withShrinks 0 |>.report (Seed.ofNat 1))).map (·.journal)
+      != (failed (large.withShrinks 0 |>.report (Seed.ofNat 2))).map
+        (·.journal))]
+
+def sample : Counterexample :=
+  ⟨2, ⟨1, 2⟩, 1, #[.input "[0,\n 1]", .note "n"], ⟨"boom\nagain"⟩⟩
+
+def rendering : List (String × Bool) := [
+  ("ok", Report.render "p" ⟨100, 0, .ok⟩ == "  ✓ p passed 100 tests."),
+  ("one test", Report.render "p" ⟨1, 0, .ok⟩ == "  ✓ p passed 1 test."),
+  ("gave up", Report.render "p" ⟨3, 100, .gaveUp⟩
+    == "  ⚐ p gave up after 100 discards, passed 3 tests."),
+  ("failed", Report.render "p" ⟨0, 0, .failed sample⟩
+    == "  ✗ p failed after 1 test and 1 shrink.\n\n    \
+        forAll [0,\n            1]\n    n\n    boom\n    again\n\n    \
+        This failure can be reproduced by running:\n    \
+        > recheck 2 ⟨1, 2⟩ <property>"),
+  ("failed, plural", (Report.render "p"
+    ⟨4, 0, .failed { sample with shrinks := 3 }⟩).startsWith
+      "  ✗ p failed after 5 tests and 3 shrinks.")]
+
+/-- Whether the action throws an error that mentions `text`. -/
+def throwsWith (text : String) (action : IO Unit) : IO Bool := do
+  try
+    action
+    pure false
+  catch e =>
+    pure (((toString e).splitOn text).length > 1)
+
+/-- What the action prints, and its result. -/
+def captured {α : Type} (action : IO α) : IO (String × α) :=
+  IO.FS.withIsolatedStreams action
+
+def effects : IO (List (String × Bool)) := do
+  let thrown ← throws.report (Seed.ofNat 0)
+  let io ← (List.range 20).allM fun i => do
+    match failed (← ioFails.report (Seed.ofNat i)) with
+    | some c =>
+      let again ← ioFails.recheck c.size c.seed
+      pure (c.journal == #[.input "500"] && again.status == .failed c)
+    | none => pure false
+  let (passed, ()) ← captured (check (counts true) "name")
+  let (seeded, ()) ← captured
+    (check (counts true) "name" (seed := some (.ofNat 1)))
+  let (rechecked, ()) ← captured (recheck 3 (.ofNat 1) (counts true) "name")
+  let (group, groupOk) ← captured
+    (checkGroup "group" [("good", counts true), ("bad", counts false)])
+  let (goodGroup, goodOk) ← captured
+    (checkGroup "group" [("good", counts true)])
+  pure [
+    ("evalIO turns an exception into a failure",
+      (failed thrown).map (·.failure.message) == some "exception: boom"),
+    ("an IO property shrinks and rechecks", io),
+    ("check prints a pass", passed == "  ✓ name passed 100 tests.\n"),
+    ("check takes a seed", seeded == "  ✓ name passed 100 tests.\n"),
+    ("check throws a failure",
+      ← throwsWith "✗ name failed after 1 test"
+        (check (counts false) "name")),
+    ("check throws when it gives up", ← throwsWith "⚐ name gave up"
+      (check (halfDiscarded.withDiscards 1) "name" (seed := some (.ofNat 0)))),
+    ("check runs an IO property",
+      ← throwsWith "exception: boom" (check throws "name")),
+    ("recheck prints a pass", rechecked == "  ✓ name passed 1 test.\n"),
+    ("recheck throws a failure", ← throwsWith "✗ name failed"
+      (recheck 3 (.ofNat 1) (counts false) "name")),
+    ("checkGroup reports a failure", !groupOk
+      && group.startsWith
+        "━━━ group ━━━\n  ✓ good passed 100 tests.\n  ✗ bad"),
+    ("checkGroup reports a pass", goodOk
+      && goodGroup == "━━━ group ━━━\n  ✓ good passed 100 tests.\n")]
+
+end HedgehogTest.Runner

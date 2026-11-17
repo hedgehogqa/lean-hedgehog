@@ -1,6 +1,8 @@
 import HedgehogTest.Basic
 import HedgehogTest.Counter
 import HedgehogTest.Madhouse
+import HedgehogTest.Generators
+import HedgehogTest.Runner
 
 /-!
 The test driver, run by `lake test`.  `MADHOUSE=1 lake test` runs the
@@ -20,6 +22,15 @@ def main : IO UInt32 := do
   let mode ← Mode.fromEnv
   let results := [
     ← expectAll "units" Basic.units,
+    ← expectAll "seeds" Generators.seeds,
+    ← expectAll "ranges" Generators.ranges,
+    ← expectAll "trees" Generators.trees,
+    ← expectAll "generators" Generators.generators,
+    ← expectAll "generator shrinking" Generators.shrinking,
+    ← expectAll "assertions" Runner.assertions,
+    ← expectAll "runner" Runner.runner,
+    ← expectAll "reports" Runner.rendering,
+    ← expectAll "check and effects" (← Runner.effects),
     ← checkGroup "properties" Basic.properties,
     ← checkGroup "effects" [("a reference holds what was set",
         Basic.refHoldsWhatWasSet)],
@@ -28,6 +39,8 @@ def main : IO UInt32 := do
         Counter.agrees)],
     ← expectAll "state machine shrinking" [
         ("a buggy counter shrinks to four increments", ← Counter.shrinks)],
+    ← expectAll "state machine facts" (← Counter.facts),
+    ← expectAll "scenario facts" Madhouse.facts,
     ← checkGroup s!"scenario ({repr mode})" [("counter stays within 100",
         Madhouse.counter mode)],
     ← expectAll "scenario shrinking" [

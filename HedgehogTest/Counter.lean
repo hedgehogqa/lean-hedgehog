@@ -69,4 +69,100 @@ def shrinks : IO Bool :=
     | .failed c => pure (c.journal[0]? == some (.input "[inc, inc, inc, inc]"))
     | _ => pure false
 
+/-! A counter that may not go below zero: preconditions. -/
+
+inductive Step where
+  | inc
+  | dec
+  deriving Repr, BEq
+
+def Step.name : Step → String
+  | .inc => "inc"
+  | .dec => "dec"
+
+/-- The system is a count and whether it ever reached two.  It fails on
+a `dec` below zero, which a valid sequence never asks for, and, when
+`strict`, on a `dec` after two was reached. -/
+def bounded (strict : Bool) : StateMachine Nat Step (Nat × Bool) Id where
+  initState := pure 0
+  transitions _ := Gen.element [.inc, .dec]
+  preconditions s t := t == .inc || s > 0
+  apply s
+    | .inc => s + 1
+    | .dec => s - 1
+  initSut s := pure (s, false)
+  applySut sut _ t := do
+    match t with
+    | .inc => pure (sut.1 + 1, sut.2 || sut.1 + 1 ≥ 2)
+    | .dec =>
+      ensure (sut.1 > 0) "below zero"
+      ensure (!(strict && sut.2)) "dec after two"
+      pure (sut.1 - 1, sut.2)
+  invariants sut s := sut.1 === s
+
+/-- Whether the strict system fails on each of twenty seeds with the
+shortest valid sequence.  Were shrinks that break the precondition kept,
+it would shrink to a lone `dec` and fail "below zero". -/
+def shrinksWithinPreconditions : Bool :=
+  (List.range 20).all fun i =>
+    let sm := bounded true
+    let p : Property Id := propertyM do
+      let (s, ts) ← forAllWith (fun x => toString (x.2.map Step.name))
+        (sm.toModel.sequence (.linear 1 50))
+      pure (sm.run s ts)
+    match (p.report (Seed.ofNat i)).status with
+    | .failed c => c.journal == #[.input "[inc, inc, dec]"]
+      && c.failure.message == "dec after two"
+    | _ => false
+
+/-- The sequences of a model on two hundred seeds, at size 99. -/
+def sequences (range : Range Nat) : List (Option (Nat × List Step)) :=
+  (List.range 200).map fun i =>
+    (((bounded false).toModel.sequence range).run 99 (Seed.ofNat i)).value
+
+/-- A model whose initial state is generated. -/
+def startsAnywhere : Property Id :=
+  let sm : StateMachine Nat Step Nat Id := {
+    initState := Gen.nat (.linear 0 100)
+    transitions := fun _ => pure .inc
+    apply := fun s _ => s + 1
+    initSut := pure
+    applySut := fun sut _ _ => pure (sut + 1)
+    invariants := fun sut s => do
+      sut === s
+      ensure (s < 50) }
+  sm.property
+
+def facts : IO (List (String × Bool)) := do
+  let torn ← IO.mkRef 0
+  let sm : StateMachine Counter Transition (IO.Ref Int) IO :=
+    { machine true with teardown := fun _ => torn.modify (· + 1) }
+  let report ← sm.property.report (Seed.ofNat 0)
+  let buggy : StateMachine Counter Transition (IO.Ref Int) IO :=
+    { machine false with teardown := fun _ => torn.modify (· + 1000) }
+  let failing ← (buggy.property.withShrinks 0).report (Seed.ofNat 0)
+  pure [
+    ("teardown runs after each passing sequence",
+      report.ok && (← torn.get) == 100 + 1000 * failing.tests),
+    ("sequences respect the preconditions", (sequences (.linear 1 50)).all
+      fun x => x.any fun (s, ts) => (bounded false).toModel.valid s ts),
+    ("valid rejects a dec at zero",
+      !(bounded false).toModel.valid 0 [.dec]
+      && (bounded false).toModel.valid 0 [.inc, .dec]),
+    ("sequences have a length in the range", (sequences (.constant 3 7)).all
+      fun x => x.any fun (_, ts) => 3 ≤ ts.length && ts.length ≤ 7),
+    ("sequences use the whole range", (sequences (.constant 3 7)).any
+      fun x => x.any fun (_, ts) => ts.length == 7),
+    ("the system agrees within the preconditions",
+      ((bounded false).property.report (Seed.ofNat 0)).ok),
+    ("shrinks stay within the preconditions", shrinksWithinPreconditions),
+    ("the initial state shrinks", (List.range 20).all fun i =>
+      match (startsAnywhere.report (Seed.ofNat i)).status with
+      | .failed c => c.journal.toList.all fun
+        | .input v =>
+          let n := ((v.drop 1).takeWhile Char.isDigit).toString.toNat?
+          n.any (· + (v.splitOn "Step.inc").length - 1 == 50)
+        | .note _ => false
+      | _ => false)]
+
 end HedgehogTest.Counter
