@@ -7,7 +7,7 @@ license = "BSD-3-Clause"
 licenseFiles = ["COPYING"]
 readmeFile = "README"
 defaultTargets = ["Hedgehog"]
-testDriver = "hedgehog-test"
+testDriver = "hedgehogTest"
 
 [leanOptions]
 autoImplicit = false
@@ -20,5 +20,5 @@ name = "Hedgehog"
 name = "HedgehogTest"
 
 [[lean_exe]]
-name = "hedgehog-test"
+name = "hedgehogTest"
 root = "HedgehogTest"
