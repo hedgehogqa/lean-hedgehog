@@ -1,0 +1,20 @@
+NAME
+    lean-hedgehog - property-based testing for Lean 4
+
+IN MEMORY OF JACOB STANLEY
+    This library is a tribute to Jacob Stanley, author and co-founder
+    of Hedgehog.
+
+    Jacob's passion for Haskell and his commitment to high-quality,
+    reliable software shaped Hedgehog in countless ways.  Integrated
+    shrinking, the idea this port is built around, is his: a generator
+    carries its own shrinks, so a shrunk value obeys the invariants of
+    the generator that made it.
+
+    Jacob passed away unexpectedly on 9 April 2023.  His absence is
+    deeply felt, but his impact on Hedgehog, and on those who had the
+    privilege to work with him, remains.  lean-hedgehog continues that
+    work in Lean, in his memory.
+
+SEE ALSO
+    https://github.com/hedgehogqa/haskell-hedgehog, the original.
