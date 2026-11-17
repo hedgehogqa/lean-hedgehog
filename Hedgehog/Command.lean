@@ -29,8 +29,8 @@ in `m`.  The state is the model; a system under test is driven from
 `apply`, through a handle kept in the state or the context. -/
 class Command (κ : Type) (σ χ : outParam Type)
     (m : outParam (Type → Type)) where
-  /-- Whether the command may run in a state. -/
-  check : κ → σ → Bool
+  /-- Whether the command may run in a state; always, unless given. -/
+  check : κ → σ → Bool := fun _ _ => true
   /-- Run the command: the next state, or a failed assertion. -/
   apply : κ → σ → TestT m σ
   /-- The command as reports show it. -/
