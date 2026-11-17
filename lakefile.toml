@@ -1,0 +1,24 @@
+name = "hedgehog"
+version = "0.1.0"
+description = "Property-based testing with integrated shrinking."
+keywords = ["testing", "property-based-testing", "shrinking"]
+homepage = "https://github.com/hedgehogqa/lean-hedgehog"
+license = "BSD-3-Clause"
+licenseFiles = ["COPYING"]
+readmeFile = "README"
+defaultTargets = ["Hedgehog"]
+testDriver = "hedgehog-test"
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "Hedgehog"
+
+[[lean_lib]]
+name = "HedgehogTest"
+
+[[lean_exe]]
+name = "hedgehog-test"
+root = "HedgehogTest"
