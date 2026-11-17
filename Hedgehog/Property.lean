@@ -1,0 +1,155 @@
+module
+
+public import Hedgehog.Gen
+
+/-!
+# Properties
+
+A property draws values with `forAll` and makes assertions about them.
+`PropertyM` is the monad it is written in: assertions and a journal over
+`Gen`, so the whole property has one shrink tree and a failing test case
+shrinks with no help from the property's author.
+
+A property that needs effects returns them: it generates in `PropertyM`,
+then gives back a `TestT m Unit` for the runner to run in `m`, once for
+the test case and once for each shrink it tries.
+-/
+
+@[expose] public section
+
+namespace Hedgehog
+
+/-- A line of a test's journal. -/
+inductive Log where
+  /-- A value drawn by `forAll`. -/
+  | input (value : String)
+  /-- Text added by `annotate`. -/
+  | note (text : String)
+  deriving Repr, BEq, Inhabited
+
+/-- What a test logged, in order. -/
+abbrev Journal := Array Log
+
+/-- Why a test failed. -/
+structure Failure where
+  message : String
+  deriving Repr, BEq, Inhabited
+
+/-- A test over `m`: it may fail, and it keeps a journal that survives
+the failure. -/
+abbrev TestT (m : Type → Type) := ExceptT Failure (StateT Journal m)
+
+/-- A test that generates: the monad of properties. -/
+abbrev PropertyM := TestT Gen
+
+section Test
+
+variable {m : Type → Type} [Monad m] {α β : Type}
+
+/-- Add a line to the journal, shown if the test fails. -/
+def annotate (text : String) : TestT m Unit :=
+  modify (·.push (.note text))
+
+/-- Fail the test. -/
+def failWith (message : String) : TestT m α :=
+  throw ⟨message⟩
+
+def failure : TestT m α :=
+  failWith "failure"
+
+def success : TestT m Unit :=
+  pure ()
+
+/-- Fail unless `b`.  (Haskell's `assert`; in Lean `assert` is a keyword
+of `do` blocks.) -/
+def ensure (b : Bool) (message : String := "ensure failed") :
+    TestT m Unit :=
+  if b then pure () else failWith message
+
+/-- Indent the lines of `s` after the first by `n` spaces. -/
+def hang (n : Nat) (s : String) : String :=
+  ("\n" ++ "".pushn ' ' n).intercalate (s.splitOn "\n")
+
+/-- Fail unless `x == y`, showing both. -/
+def eq [BEq α] [Repr α] (x y : α) : TestT m Unit :=
+  if x == y then pure ()
+  else failWith
+    s!"=== failed\n  lhs: {hang 7 (reprStr x)}\n  rhs: {hang 7 (reprStr y)}"
+
+/-- Fail if `x == y`, showing both. -/
+def ne [BEq α] [Repr α] (x y : α) : TestT m Unit :=
+  if x != y then pure ()
+  else failWith
+    s!"/== failed\n  lhs: {hang 7 (reprStr x)}\n  rhs: {hang 7 (reprStr y)}"
+
+@[inherit_doc] scoped infix:50 " === " => eq
+@[inherit_doc] scoped infix:50 " /== " => ne
+
+/-- Fail unless decoding what `encode` made of `x` gives `x` back. -/
+def tripping {f : Type → Type} [Applicative f] [BEq (f α)] [Repr (f α)]
+    (x : α) (encode : α → β) (decode : β → f α) : TestT m Unit :=
+  decode (encode x) === pure x
+
+end Test
+
+/-- Run an action; an exception fails the test. -/
+def evalIO {α : Type} (action : IO α) : TestT IO α := do
+  match ← action.toBaseIO with
+  | .ok x => pure x
+  | .error e => failWith s!"exception: {e}"
+
+/-- Discard the test case; the runner draws another. -/
+def discard {α : Type} : PropertyM α :=
+  liftM (Gen.discard : Gen α)
+
+/-- Draw a value and log it as `render` shows it. -/
+def forAllWith {α : Type} (render : α → String) (g : Gen α) :
+    PropertyM α := do
+  let x ← liftM g
+  modify (·.push (.input (render x)))
+  pure x
+
+/-- Draw a value and log it. -/
+def forAll {α : Type} [Repr α] (g : Gen α) : PropertyM α :=
+  forAllWith reprStr g
+
+/-- When a property is done. -/
+structure Config where
+  /-- Test cases that must pass. -/
+  tests : Nat := 100
+  /-- Discarded test cases after which the runner gives up. -/
+  discards : Nat := 100
+  /-- Shrinks after which the runner reports what it has. -/
+  shrinks : Nat := 1000
+  deriving Repr, BEq, Inhabited
+
+/-- A property: the generating part, which returns the part to run in
+`m`. -/
+structure Property (m : Type → Type) where
+  config : Config := {}
+  test : PropertyM (TestT m Unit)
+
+/-- A pure property. -/
+def property (test : PropertyM Unit) : Property Id :=
+  { test := (fun _ => pure ()) <$> test }
+
+/-- A property whose assertions run in `m`. -/
+def propertyM {m : Type → Type} (test : PropertyM (TestT m Unit)) :
+    Property m :=
+  { test }
+
+namespace Property
+
+variable {m : Type → Type}
+
+def withTests (n : Nat) (p : Property m) : Property m :=
+  { p with config.tests := n }
+
+def withDiscards (n : Nat) (p : Property m) : Property m :=
+  { p with config.discards := n }
+
+def withShrinks (n : Nat) (p : Property m) : Property m :=
+  { p with config.shrinks := n }
+
+end Property
+end Hedgehog
