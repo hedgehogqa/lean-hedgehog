@@ -1,11 +1,13 @@
 import Hedgehog
 
 /-!
-# Three bugs, over-simplified from leanVM
+# Three seeded bugs, in toys shaped after leanVM
 
 A size on the wire, a memory whose cells are written once, and a
-program counter.  `lake exe examples` runs them, and
-`HedgehogTest/LeanVM.lean` checks what they shrink to.
+program counter: three toys shaped after parts of leanVM, each with a
+bug put there on purpose.  None of these bugs was found in leanVM.
+`lake exe examples` runs them, and `HedgehogTest/LeanVM.lean` checks
+what they shrink to.
 
 They are declared at the top level, with no namespace, so that a report
 names `Op.set` and nothing longer.
