@@ -41,7 +41,7 @@ In `lakefile.toml`, on Lean 4.35.0 or later:
 [[require]]
 name = "hedgehog"
 git = "https://github.com/hedgehogqa/lean-hedgehog"
-rev = "master"
+rev = "v0.1.0"
 ```
 
 ## AI disclosure
