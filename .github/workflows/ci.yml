@@ -4,12 +4,23 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+  # Mondays, so that a new stable Lean that breaks the build is noticed.
+  schedule:
+    - cron: "0 6 * * 1"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The toolchain of lean-toolchain, and the current stable one.
+        toolchain: [pinned, stable]
     steps:
       - uses: actions/checkout@v4
+      - if: matrix.toolchain == 'stable'
+        run: echo leanprover/lean4:stable > lean-toolchain
       # Builds the library and runs `lake test`.
       - uses: leanprover/lean-action@v1
       # Each example has a bug and must find it, in both modes.
