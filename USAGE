@@ -233,6 +233,12 @@ COVERAGE
     do, so a test with effects can classify by what the system
     answered.
 
+    The share of a kind also depends on the number of tests: a run
+    starts at size 0 and grows by one, so a run of 50 tests has only
+    small cases, where a sequence is short and a rare kind rarer.  A
+    minimum set from a run of 1,000 can fail at 50; set it for the
+    shortest run that is made, or ask it only of long ones.
+
 EFFECTS
     Generators are pure.  A property whose test has effects generates
     first and returns the test, a TestT m Unit, which the runner runs
@@ -459,6 +465,8 @@ STATE MACHINES, COMMANDS AS TYPES
     Mode.deterministic
         One test: each command once, in the order given.  This is the
         scripted test, and the mode Mode.fromEnv gives by default.
+        It is for Command.fixed: a Command.gen draws its command once,
+        so the one test is one random sequence and says little.
 
     Mode.madhouse
         A hundred tests, each a random sequence of 1 to 15 commands
@@ -500,6 +508,16 @@ DIFFERENCES FROM HASKELL HEDGEHOG
     - State machine testing follows proptest-state-machine and
       madhouse-rs, not Hedgehog's Command with symbolic variables.
     - Not ported yet: see NEWS.
+
+PITFALLS
+    - lake env lean scratch.lean reads the built .olean of each
+      import.  A generator edited and sampled from a scratch file
+      without lake build is sampled as it was.
+    - A value drawn after another that it depends on shrinks less far
+      than the two drawn with Gen.zip (see Combination).
+    - Gen.sequence shrinks by removing elements (see Collections).
+    - A minimum of cover depends on the number of tests (see
+      COVERAGE).
 
 DEVELOPMENT
         lake build              # Build the library.

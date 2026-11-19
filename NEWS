@@ -15,6 +15,9 @@ lean-hedgehog NEWS -- history of user-visible changes.
   - A file that opens Hedgehog has BEq for Except, so === and tripping
     take the result of a decoder.
   - Gen.sample takes a size.
+  - USAGE has a section of pitfalls, and says that a minimum of cover
+    depends on the number of tests and that deterministic mode is for
+    Command.fixed.
 
 0.2.0 (2026-11-19)
 
