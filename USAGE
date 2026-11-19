@@ -48,7 +48,9 @@ GENERATORS
     Collections
         Gen.list and Gen.array take a length range and an element
         generator.  A list shrinks by losing elements, then by
-        shrinking them.  Gen.sequence takes a list of generators.
+        shrinking them.  Gen.sequence takes a list of generators;
+        it shrinks the same way, so a shrunk list may be shorter than
+        the list of generators unless (atLeast := n) keeps n elements.
         Gen.subsequence and Gen.shuffle take a list.
 
     Choice
