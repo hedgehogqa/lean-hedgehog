@@ -31,13 +31,15 @@ namespace Hedgehog
 
 /-- A command `κ` on a state `σ`, built from a context `χ`, with effects
 in `m`.  The state is the model; a system under test is driven from
-`apply`, through a handle kept in the state or the context. -/
+`apply`, through a handle kept in the context or in the state.  Each
+method that takes a command takes the context before it, but `label`,
+so a command holds only what is its own. -/
 class Command (κ : Type) (σ χ : outParam Type)
     (m : outParam (Type → Type)) where
   /-- Whether the command may run in a state; always, unless given. -/
-  check : κ → σ → Bool := fun _ _ => true
+  check : χ → κ → σ → Bool := fun _ _ _ => true
   /-- Run the command: the next state, or a failed assertion. -/
-  apply : κ → σ → TestT m σ
+  apply : χ → κ → σ → TestT m σ
   /-- The command as reports show it. -/
   label : κ → String
   /-- Generate the command. -/
@@ -45,7 +47,7 @@ class Command (κ : Type) (σ χ : outParam Type)
   /-- The state after the command, as far as can be told before it
   runs; the same state unless given.  A scenario generates the next
   command for this state, since `apply` has not run yet. -/
-  next : κ → σ → σ := fun _ s => s
+  next : χ → κ → σ → σ := fun _ _ s => s
   /-- Generate the command for a state: the start state, moved by the
   `next` of the commands before.  `build` unless given. -/
   buildIn : χ → σ → Gen κ := fun ctx _ => build ctx
@@ -65,18 +67,18 @@ namespace Command
 
 variable {κ σ χ : Type} {m : Type → Type}
 
-def wrap [Command κ σ χ m] (c : κ) : CommandWrapper σ m :=
-  ⟨label c, check c, apply c, next c⟩
+def wrap [Command κ σ χ m] (ctx : χ) (c : κ) : CommandWrapper σ m :=
+  ⟨label c, check ctx c, apply ctx c, next ctx c⟩
 
 /-- A scenario entry: the command `κ`, generated for a state. -/
 def gen (κ : Type) [Command κ σ χ m] (ctx : χ) (s : σ) :
     Gen (CommandWrapper σ m) :=
-  wrap <$> (buildIn ctx s : Gen κ)
+  wrap ctx <$> (buildIn ctx s : Gen κ)
 
 /-- A scenario entry: this very command. -/
-def fixed [Command κ σ χ m] (c : κ) (_ : χ) (_ : σ) :
+def fixed [Command κ σ χ m] (c : κ) (ctx : χ) (_ : σ) :
     Gen (CommandWrapper σ m) :=
-  pure (wrap c)
+  pure (wrap ctx c)
 
 end Command
 

@@ -22,8 +22,8 @@ structure Increment where
   amount : Nat
 
 instance : Command Increment State Context Id where
-  check _ _ := true
-  apply c s := do
+  check _ _ _ := true
+  apply _ c s := do
     let s := { s with value := s.value + c.amount }
     ensure (s.value ≤ 100) s!"counter exceeded 100: {s.value}"
     pure s
@@ -33,8 +33,8 @@ instance : Command Increment State Context Id where
 structure Reset where
 
 instance : Command Reset State Context Id where
-  check _ s := s.value > 0
-  apply _ s := pure { s with value := 0 }
+  check _ _ s := s.value > 0
+  apply _ _ s := pure { s with value := 0 }
   label _ := "RESET"
   build _ := pure {}
 
@@ -124,12 +124,12 @@ structure Spend where
   amount : Nat
 
 instance : Command Spend Budget Unit Id where
-  apply c s := do
+  apply _ c s := do
     ensure (c.amount ≤ s.left) s!"overspent by {c.amount - s.left}"
     pure { left := s.left - c.amount }
   label c := s!"SPEND({c.amount})"
   build _ := pure ⟨0⟩
-  next c s := { left := s.left - c.amount }
+  next _ c s := { left := s.left - c.amount }
   buildIn _ s := Spend.mk <$> Gen.nat (.constant 0 s.left)
 
 /-- The same without `next`: every command is generated for the start
@@ -138,7 +138,7 @@ structure SpendBlind where
   amount : Nat
 
 instance : Command SpendBlind Budget Unit Id where
-  apply c s := do
+  apply _ c s := do
     ensure (c.amount ≤ s.left) s!"overspent by {c.amount - s.left}"
     pure { left := s.left - c.amount }
   label c := s!"SPEND({c.amount})"
@@ -151,20 +151,60 @@ def failsWith (p : Property Id) (i : Nat) : Option String :=
   | .failed c => some c.failure.message
   | _ => none
 
+/-- A command that reads its limit from the context when it runs. -/
+structure Bounded where
+  amount : Nat
+
+instance : Command Bounded State Context Id where
+  apply ctx c s := do
+    ensure (c.amount ≤ ctx.maxIncrement) "more than the context allows"
+    pure { s with value := s.value + c.amount }
+  label c := s!"BOUNDED({c.amount})"
+  build _ := pure ⟨7⟩
+
+/-- A command that may run, and tells its next state, by the context. -/
+structure Gated where
+  amount : Nat
+
+instance : Command Gated State Context Id where
+  check ctx c _ := c.amount ≤ ctx.maxIncrement
+  apply _ c s := pure { s with value := s.value + c.amount }
+  label c := s!"GATED({c.amount})"
+  build _ := pure ⟨7⟩
+  next ctx _ s := { s with value := s.value + ctx.maxIncrement }
+
+/-- The context of the facts below. -/
+def ctx : Context := ⟨50⟩
+
 def facts : List (String × Bool) := [
   ("a command whose check fails is skipped",
-    execute [Command.wrap ({} : Reset), Command.wrap (Increment.mk 5),
-      Command.wrap ({} : Reset), Command.wrap ({} : Reset)]
+    execute [Command.wrap ctx ({} : Reset), Command.wrap ctx (Increment.mk 5),
+      Command.wrap ctx ({} : Reset), Command.wrap ctx ({} : Reset)]
       == some (0, ["executed INCREMENT(5)", "executed RESET"])),
-  ("commands run in order", execute [Command.wrap (Increment.mk 5),
-    Command.wrap (Increment.mk 6)]
+  ("commands run in order", execute [Command.wrap ctx (Increment.mk 5),
+    Command.wrap ctx (Increment.mk 6)]
       == some (11, ["executed INCREMENT(5)", "executed INCREMENT(6)"])),
   ("a failed assertion stops the scenario",
-    execute [Command.wrap (Increment.mk 101), Command.wrap (Increment.mk 1)]
-      == none),
+    execute [Command.wrap ctx (Increment.mk 101),
+      Command.wrap ctx (Increment.mk 1)] == none),
   ("no commands", execute [] == some (0, [])),
+  ("check is given the context",
+    execute [Command.wrap ⟨7⟩ (Gated.mk 7)]
+        == some (7, ["executed GATED(7)"])
+      && execute [Command.wrap ⟨6⟩ (Gated.mk 7)] == some (0, [])),
+  ("next is given the context",
+    ((Command.wrap ⟨5⟩ (Gated.mk 1) : CommandWrapper State Id).next
+      ⟨3⟩).value == 8),
+  ("apply is given the context of the scenario",
+    execute [Command.wrap ⟨7⟩ (Bounded.mk 7)]
+        == some (7, ["executed BOUNDED(7)"])
+      && execute [Command.wrap ⟨6⟩ (Bounded.mk 7)] == none
+      && (scenario .deterministic (Context.mk 7) [Command.gen Bounded]
+        |>.report (Seed.ofNat 0)).ok
+      && !(scenario .deterministic (Context.mk 6) [Command.gen Bounded]
+        |>.report (Seed.ofNat 0)).ok),
   ("a wrapper shows its label",
-    reprStr (Command.wrap (Increment.mk 5) : CommandWrapper State Id)
+    reprStr (Command.wrap ctx (Increment.mk 5) : CommandWrapper State Id)
       == "INCREMENT(5)"),
   ("fixed keeps the command", (List.range 20).all fun i =>
     ((Command.fixed (Increment.mk 42) (Context.mk 50) default).run 50
@@ -219,10 +259,10 @@ def facts : List (String × Bool) := [
       failsWith (scenario .madhouse () [Command.gen SpendBlind]
         (.constant 20 30)) i == some "overspent by 1"),
   ("next is the same state unless given",
-    ((Command.wrap (Increment.mk 5) : CommandWrapper State Id).next
+    ((Command.wrap ctx (Increment.mk 5) : CommandWrapper State Id).next
       ⟨3⟩).value == 3),
   ("a wrapper has the command's next",
-    ((Command.wrap (Spend.mk 5) : CommandWrapper Budget Id).next
+    ((Command.wrap () (Spend.mk 5) : CommandWrapper Budget Id).next
       ⟨8⟩).left == 3),
   ("gen builds for the state", (List.range 200).all fun i =>
     ((Command.gen Spend () ⟨2⟩).run 50 (Seed.ofNat i)).value.any fun c =>

@@ -385,8 +385,8 @@ STATE MACHINES, COMMANDS AS TYPES
           amount : Nat
 
         instance : Command Increment State Context Id where
-          check _ _ := true
-          apply c s := do
+          check _ _ _ := true
+          apply _ c s := do
             let s := { s with value := s.value + c.amount }
             ensure (s.value ≤ 100) s!"counter exceeded 100: {s.value}"
             pure s
@@ -396,32 +396,44 @@ STATE MACHINES, COMMANDS AS TYPES
         structure Reset where
 
         instance : Command Reset State Context Id where
-          check _ s := s.value > 0
-          apply _ s := pure { s with value := 0 }
+          check _ _ s := s.value > 0
+          apply _ _ s := pure { s with value := 0 }
           label _ := "RESET"
           build _ := pure {}
 
     check is the precondition, apply runs the command and asserts,
-    label shows it, and build generates it.  A system under test is
-    driven from apply, in IO or another monad, through a handle kept
-    in the state or the context.
+    label shows it, and build generates it.  check and apply take the
+    context first, then the command and the state.  A system under
+    test is driven from apply, in IO or another monad, through a
+    handle kept in the context: a command holds only what is its own.
+
+    The types of the state and the context are fixed by the command
+    type.  A state that varies with a value, such as the frame of a
+    machine at a fork, takes that value as an index of all three, and
+    the instance is written once for every index:
+
+        instance {fork : Fork} :
+            Command (Step fork) (Frame fork) (Node fork) IO where
+
+    A scenario then names its state, scenario (σ := Frame fork) ...,
+    since it cannot be found from the list of commands alone.
 
     build sees the context only.  A command that must fit the state,
     such as one that fills what is left of a counter, gives buildIn,
     which also takes the state, and next, which says what state the
-    command leads to:
+    command leads to and takes the context first as check does:
 
         structure Fill where
           amount : Nat
 
         instance : Command Fill State Context Id where
-          apply c s := do
+          apply _ c s := do
             let s := { s with value := s.value + c.amount }
             ensure (s.value ≤ 100) s!"counter exceeded 100: {s.value}"
             pure s
           label c := s!"FILL({c.amount})"
           build _ := pure ⟨0⟩
-          next c s := { s with value := s.value + c.amount }
+          next _ c s := { s with value := s.value + c.amount }
           buildIn _ s := Fill.mk <$> Gen.nat (.constant 0 (100 - s.value))
 
     A scenario generates its commands before it runs any, so the state

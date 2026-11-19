@@ -73,7 +73,7 @@ structure Registers where
 structure Next where
 
 instance : Command Next Registers Unit Id where
-  apply _ r := do
+  apply _ _ r := do
     ensure (r.pc + 1 < 8) "pc left the program"
     pure { pc := r.pc + 1 }
   label _ := "NEXT"
@@ -83,7 +83,7 @@ structure Jump where
   target : Nat
 
 instance : Command Jump Registers Unit Id where
-  apply c _ := pure { pc := c.target }
+  apply _ c _ := pure { pc := c.target }
   label c := s!"JUMP({c.target})"
   build _ := Jump.mk <$> Gen.nat (.constant 0 7)
 
