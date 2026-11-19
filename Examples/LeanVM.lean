@@ -61,7 +61,7 @@ def memory : StateMachine (List (Nat × Nat)) Op (Array Nat) Id where
   apply m
     | .set a v => if (m.lookup a).isSome then m else (a, v) :: m
   initSut _ := pure (Array.replicate 8 0)
-  applySut cells _
+  applySut cells _ _
     | .set a v => pure (cells.set! a v)
   invariants cells m :=
     for (a, v) in m do cells[a]! === v

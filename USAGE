@@ -343,7 +343,7 @@ STATE MACHINES, TRANSITIONS AS ONE TYPE
         def machine : StateMachine Counter Transition (IO.Ref Int) IO where
           toModel := model
           initSut s := IO.mkRef s.value
-          applySut sut s t := do
+          applySut sut _ s t := do
             match t with
             | .inc => sut.modify fun n => if n ≥ s.max then n else n + 1
             | .dec => sut.modify (· - 1)
@@ -354,8 +354,10 @@ STATE MACHINES, TRANSITIONS AS ONE TYPE
 
         #eval check machine.property "counter agrees with its model"
 
-    The model state that applySut and invariants receive is the one
-    after the transition.  preconditions, true by default, says when a
+    applySut receives the model state before the transition and the
+    one after it, and invariants the one after.  A model that refuses
+    a transition leaves the state as it was, and the system is checked
+    against that.  preconditions, true by default, says when a
     transition may run; teardown releases the system after a passing
     sequence.  machine.property takes the range of sequence lengths,
     1 to 50 by default.

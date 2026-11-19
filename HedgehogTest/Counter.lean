@@ -42,7 +42,7 @@ def machine (saturate : Bool) :
     StateMachine Counter Transition (IO.Ref Int) IO where
   toModel := model
   initSut s := IO.mkRef s.value
-  applySut sut s t := do
+  applySut sut _ s t := do
     match t with
     | .inc => sut.modify fun n => if saturate && n ≥ s.max then n else n + 1
     | .dec => sut.modify (· - 1)
@@ -91,7 +91,7 @@ def bounded (strict : Bool) : StateMachine Nat Step (Nat × Bool) Id where
     | .inc => s + 1
     | .dec => s - 1
   initSut s := pure (s, false)
-  applySut sut _ t := do
+  applySut sut _ _ t := do
     match t with
     | .inc => pure (sut.1 + 1, sut.2 || sut.1 + 1 ≥ 2)
     | .dec =>
@@ -127,11 +127,22 @@ def startsAnywhere : Property Id :=
     transitions := fun _ => pure .inc
     apply := fun s _ => s + 1
     initSut := pure
-    applySut := fun sut _ _ => pure (sut + 1)
+    applySut := fun sut _ _ _ => pure (sut + 1)
     invariants := fun sut s => do
       sut === s
       ensure (s < 50) }
   sm.property
+
+/-- A system that checks each step against both states of the model. -/
+def steps : StateMachine Nat Step Nat Id where
+  initState := pure 0
+  transitions _ := pure .inc
+  apply s _ := s + 1
+  initSut := pure
+  applySut sut before after _ := do
+    sut === before
+    after === before + 1
+    pure after
 
 def facts : IO (List (String × Bool)) := do
   let torn ← IO.mkRef 0
@@ -142,6 +153,8 @@ def facts : IO (List (String × Bool)) := do
     { machine false with teardown := fun _ => torn.modify (· + 1000) }
   let failing ← (buggy.property.withShrinks 0).report (Seed.ofNat 0)
   pure [
+    ("applySut is given the model state before and the one after",
+      (steps.property.report (Seed.ofNat 0)).run.ok),
     ("teardown runs after each passing sequence",
       report.ok && (← torn.get) == 100 + 1000 * failing.tests),
     ("sequences respect the preconditions", (sequences (.linear 1 50)).all

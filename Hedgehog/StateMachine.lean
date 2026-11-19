@@ -79,9 +79,9 @@ structure StateMachine (σ τ ς : Type) (m : Type → Type) [Monad m]
     extends Model σ τ where
   /-- The system for an initial model state. -/
   initSut : σ → m ς
-  /-- Run a transition on the system.  The model state is the one after
-  the transition. -/
-  applySut : ς → σ → τ → TestT m ς
+  /-- Run a transition on the system, given the model state before the
+  transition and the one after it. -/
+  applySut : ς → σ → σ → τ → TestT m ς
   /-- What must hold after every transition. -/
   invariants : ς → σ → TestT m Unit := fun _ _ => pure ()
   /-- Release the system after a sequence that passed. -/
@@ -98,8 +98,9 @@ def run (sm : StateMachine σ τ ς m) (s : σ) (ts : List τ) :
   let mut sut ← liftM (sm.initSut s)
   sm.invariants sut s
   for t in ts do
+    let before := s
     s := sm.apply s t
-    sut ← sm.applySut sut s t
+    sut ← sm.applySut sut before s t
     sm.invariants sut s
   liftM (sm.teardown sut)
 
