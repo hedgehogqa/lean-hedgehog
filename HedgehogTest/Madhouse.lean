@@ -113,6 +113,44 @@ def start (r : Report) : Option String :=
     | _ => none
   | _ => none
 
+/-- What is left to spend. -/
+structure Budget where
+  left : Nat := 100
+  deriving Repr, Inhabited
+
+/-- Spend no more than is left: generated for the state, and `next`
+says what it leaves. -/
+structure Spend where
+  amount : Nat
+
+instance : Command Spend Budget Unit Id where
+  apply c s := do
+    ensure (c.amount ≤ s.left) s!"overspent by {c.amount - s.left}"
+    pure { left := s.left - c.amount }
+  label c := s!"SPEND({c.amount})"
+  build _ := pure ⟨0⟩
+  next c s := { left := s.left - c.amount }
+  buildIn _ s := Spend.mk <$> Gen.nat (.constant 0 s.left)
+
+/-- The same without `next`: every command is generated for the start
+state. -/
+structure SpendBlind where
+  amount : Nat
+
+instance : Command SpendBlind Budget Unit Id where
+  apply c s := do
+    ensure (c.amount ≤ s.left) s!"overspent by {c.amount - s.left}"
+    pure { left := s.left - c.amount }
+  label c := s!"SPEND({c.amount})"
+  build _ := pure ⟨0⟩
+  buildIn _ s := SpendBlind.mk <$> Gen.nat (.constant 0 s.left)
+
+/-- The message a scenario fails with on a seed. -/
+def failsWith (p : Property Id) (i : Nat) : Option String :=
+  match (p.report (Seed.ofNat i)).status with
+  | .failed c => some c.failure.message
+  | _ => none
+
 def facts : List (String × Bool) := [
   ("a command whose check fails is skipped",
     execute [Command.wrap ({} : Reset), Command.wrap (Increment.mk 5),
@@ -129,10 +167,10 @@ def facts : List (String × Bool) := [
     reprStr (Command.wrap (Increment.mk 5) : CommandWrapper State Id)
       == "INCREMENT(5)"),
   ("fixed keeps the command", (List.range 20).all fun i =>
-    ((Command.fixed (Increment.mk 42) (Context.mk 50)).run 50
+    ((Command.fixed (Increment.mk 42) (Context.mk 50) default).run 50
       (Seed.ofNat i)).value.map (·.label) == some "INCREMENT(42)"),
   ("gen builds from the context", (List.range 200).all fun i =>
-    ((Command.gen Increment (Context.mk 3)).run 50
+    ((Command.gen Increment (Context.mk 3) default).run 50
       (Seed.ofNat i)).value.any fun c =>
         ["INCREMENT(1)", "INCREMENT(2)", "INCREMENT(3)"].contains c.label),
   ("deterministic mode runs one test",
@@ -167,6 +205,28 @@ def facts : List (String × Bool) := [
     (List.range 20).all fun i =>
       start ((startsAt 200 40 .madhouse).report (Seed.ofNat i))
         == some "60"),
+  ("a command is generated for the state the ones before lead to",
+    (List.range 20).all fun i =>
+      ((scenario .madhouse () [Command.gen Spend] (.constant 20 30)).report
+        (Seed.ofNat i)).ok),
+  ("deterministic mode generates for that state too",
+    (List.range 20).all fun i =>
+      ((scenario .deterministic () (List.replicate 20
+        (Command.gen Spend))).report (Seed.ofNat i)).ok),
+  ("without next a command is generated for the start state, and a \
+    failure shrinks to the least",
+    (List.range 20).all fun i =>
+      failsWith (scenario .madhouse () [Command.gen SpendBlind]
+        (.constant 20 30)) i == some "overspent by 1"),
+  ("next is the same state unless given",
+    ((Command.wrap (Increment.mk 5) : CommandWrapper State Id).next
+      ⟨3⟩).value == 3),
+  ("a wrapper has the command's next",
+    ((Command.wrap (Spend.mk 5) : CommandWrapper Budget Id).next
+      ⟨8⟩).left == 3),
+  ("gen builds for the state", (List.range 200).all fun i =>
+    ((Command.gen Spend () ⟨2⟩).run 50 (Seed.ofNat i)).value.any fun c =>
+      ["SPEND(0)", "SPEND(1)", "SPEND(2)"].contains c.label),
   ("deterministic mode starts from the generated state too",
     (List.range 20).any fun i =>
       !((startsAt 200 0 .deterministic).report (Seed.ofNat i)).ok)]

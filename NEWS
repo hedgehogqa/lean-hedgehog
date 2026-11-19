@@ -9,11 +9,16 @@ lean-hedgehog NEWS -- history of user-visible changes.
   - scenario takes a range of lengths for madhouse mode and a setup
     that runs before the first command.  scenarioFrom generates the
     start state, which no longer needs a default.
+  - Command has buildIn, which generates a command for a state, and
+    next, which says what state a command leads to.  Both have
+    defaults, so an instance without them is unchanged.
   - USAGE says that Gen.sequence shrinks by removing elements.
   - Incompatible: Log has the constructor label, Status the constructor
     uncovered, and Report the field coverage.  A match on Log or
     Status needs the new case, and ⟨tests, discards, status⟩ a fourth
-    component.
+    component.  Command.gen and Command.fixed take the state after
+    the context, and CommandWrapper has the field next; a list of
+    them given to scenario is unchanged.
 
 0.1.0 (2026-11-18)
 

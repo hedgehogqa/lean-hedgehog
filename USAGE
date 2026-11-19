@@ -360,6 +360,30 @@ STATE MACHINES, COMMANDS AS TYPES
     driven from apply, in IO or another monad, through a handle kept
     in the state or the context.
 
+    build sees the context only.  A command that must fit the state,
+    such as one that fills what is left of a counter, gives buildIn,
+    which also takes the state, and next, which says what state the
+    command leads to:
+
+        structure Fill where
+          amount : Nat
+
+        instance : Command Fill State Context Id where
+          apply c s := do
+            let s := { s with value := s.value + c.amount }
+            ensure (s.value ≤ 100) s!"counter exceeded 100: {s.value}"
+            pure s
+          label c := s!"FILL({c.amount})"
+          build _ := pure ⟨0⟩
+          next c s := { s with value := s.value + c.amount }
+          buildIn _ s := Fill.mk <$> Gen.nat (.constant 0 (100 - s.value))
+
+    A scenario generates its commands before it runs any, so the state
+    buildIn sees is the start state moved by the next of the commands
+    before, not by their apply.  Without next that is the start state.
+    When a shrink removes a command, the ones after it stay as they
+    were generated, and check skips those that no longer may run.
+
     A scenario lists commands.  Command.gen names a command type to
     generate; Command.fixed takes a command as it is:
 
