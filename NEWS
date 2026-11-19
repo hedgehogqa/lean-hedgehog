@@ -8,6 +8,13 @@ lean-hedgehog NEWS -- history of user-visible changes.
     HEDGEHOG_RECHECK, so a driver replays a failure without a change.
   - checkGroup takes mustFail, for a group of findings: it is true
     when each property fails with a counterexample.
+  - Property.lift takes a property to a monad that its own lifts to,
+    so a pure one fits in a group of IO.
+  - Gen.bytes generates a ByteArray, and bytesHex shows one for
+    forAllWith.
+  - A file that opens Hedgehog has BEq for Except, so === and tripping
+    take the result of a decoder.
+  - Gen.sample takes a size.
 
 0.2.0 (2026-11-19)
 

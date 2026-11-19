@@ -37,6 +37,15 @@ def assertions : List (String × Bool) := [
   ("/== on different values", passes ((1 : Nat) /== 2)),
   ("/== on equal values", message ((1 : Nat) /== 1)
     == some "/== failed\n  lhs: 1\n  rhs: 1"),
+  ("bytesHex", bytesHex ⟨#[0, 10, 255]⟩ == "000aff"
+    && bytesHex .empty == ""),
+  ("=== on the results of a decoder", passes
+    ((.ok 1 : Except String Nat) === .ok 1)
+      && !passes ((.ok 1 : Except String Nat) === .ok 2)
+      && !passes ((.ok 1 : Except String Nat) === .error "no")
+      && passes ((.error "no" : Except String Nat) === .error "no")),
+  ("tripping through a decoder into Except", passes (tripping (12 : Nat)
+    toString fun s => (s.toNat?.elim (.error "no") .ok : Except String Nat))),
   ("tripping round trip",
     passes (tripping (12 : Nat) toString String.toNat?)),
   ("tripping failure",
@@ -278,6 +287,10 @@ def effects : IO (List (String × Bool)) := do
   let unset := (← IO.getEnv "HEDGEHOG_ONLY").isNone
     && (← IO.getEnv "HEDGEHOG_RECHECK").isNone
   let fromEnv ← if unset then (· == {}) <$> Selection.fromEnv else pure true
+  let lifted ← (counts false).lift.report (Seed.ofNat 0)
+  let sampled ← (List.range 20).allM fun _ => do
+    pure ((← Gen.sample (Gen.sized pure) 77) == 77
+      && (← Gen.sample (Gen.sized pure)) == 30)
   pure [
     ("evalIO turns an exception into a failure",
       (failed thrown).map (·.failure.message) == some "exception: boom"),
@@ -322,6 +335,9 @@ def effects : IO (List (String × Bool)) := do
         && !({ only := ["a", "b"] } : Selection).selects "xcx"),
     ("an environment that asks for nothing selects every property",
       fromEnv),
+    ("a lifted pure property fails as it did", (failed lifted).isSome
+      && lifted == ((counts false).report (Seed.ofNat 0)).run),
+    ("Gen.sample takes a size, 30 unless given", sampled),
     ("checkGroup reports a pass", goodOk
       && goodGroup == "━━━ group ━━━\n  ✓ good passed 100 tests.\n")]
 

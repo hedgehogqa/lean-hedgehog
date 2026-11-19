@@ -275,15 +275,21 @@ def unicode : Gen Char :=
 def string (range : Range Nat) (g : Gen Char) : Gen String :=
   String.ofList <$> list range g
 
+/-- A byte array with a length in the range; it shrinks as a list of
+bytes does, by losing bytes and towards zeros. -/
+def bytes (range : Range Nat) : Gen ByteArray :=
+  (fun bs => ByteArray.mk bs.toArray)
+    <$> list range (integral (.constant (0 : UInt8) 255))
+
 /-! ## Looking at a generator -/
 
-/-- A value of `g` at size 30. -/
-def sample (g : Gen α) : IO α := do
+/-- A value of `g` at a size, 30 unless given. -/
+def sample (g : Gen α) (size : Size := 30) : IO α := do
   let rec attempt : Nat → Seed → IO α
     | 0, _ => throw (IO.userError "Gen.sample: too many discards")
     | fuel + 1, seed =>
       let (s1, s2) := seed.split
-      match (g.run 30 s1).value with
+      match (g.run size s1).value with
       | some x => pure x
       | none => attempt fuel s2
   attempt 100 (← Seed.random)

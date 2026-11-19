@@ -185,6 +185,8 @@ def generators : List (String × Bool) := [
     2 ≤ xs.size && xs.size ≤ 4),
   ("string", always (Gen.string (.constant 2 4) Gen.digit) fun s =>
     2 ≤ s.length && s.length ≤ 4 && s.all Char.isDigit),
+  ("bytes", always (Gen.bytes (.constant 2 4)) fun bs =>
+    2 ≤ bs.size && bs.size ≤ 4),
   ("lower", always Gen.lower Char.isLower),
   ("upper", always Gen.upper Char.isUpper),
   ("digit", always Gen.digit Char.isDigit),
@@ -243,6 +245,9 @@ def shrinking : List (String × Bool) := [
   ("string shrinks", shrinksTo (property do
     let s ← forAll (Gen.string (.linear 0 20) Gen.lower)
     ensure (s.length < 2)) [["\"aa\""]]),
+  ("bytes shrink", shrinksTo (property do
+    let bs ← forAllWith bytesHex (Gen.bytes (.linear 0 20))
+    ensure (bs.size < 2)) [["0000"]]),
   ("array shrinks", shrinksTo (property do
     let xs ← forAll (Gen.array (.linear 0 20) (Gen.nat (.linear 0 9)))
     ensure (xs.size < 2)) [["#[0, 0]"]]),

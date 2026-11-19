@@ -51,7 +51,8 @@ GENERATORS
         shrinking them.  Gen.sequence takes a list of generators;
         it shrinks the same way, so a shrunk list may be shorter than
         the list of generators unless (atLeast := n) keeps n elements.
-        Gen.subsequence and Gen.shuffle take a list.
+        Gen.subsequence and Gen.shuffle take a list.  Gen.bytes
+        takes a length range and makes a ByteArray.
 
     Choice
         Gen.element picks a value, Gen.choice a generator, and
@@ -82,9 +83,11 @@ GENERATORS
         Gen.shrink adds shrinks to a generator and Gen.prune removes
         them all.  Neither is needed in ordinary use.
 
-    To look at a generator, sample it or draw its shrink tree:
+    To look at a generator, sample it or draw its shrink tree.
+    Gen.sample draws at size 30, or at the size given:
 
         #eval Gen.sample genPoint
+        #eval Gen.sample genPoint 99
         #eval IO.println ((Gen.int (.constant 0 10)).render 30 (.ofNat 1) 3)
 
         9
@@ -161,7 +164,12 @@ PROPERTIES
 
     x === y, x /== y
         Fail unless the two are equal, or differ, by BEq; the report
-        shows both.
+        shows both.  Core has no BEq for Except, so a file that opens
+        Hedgehog gets one: the result of a decoder compares as it is.
+
+    bytesHex bytes
+        A ByteArray in hexadecimal.  Core has no Repr for it, so draw
+        one with forAllWith bytesHex (Gen.bytes (.linear 0 64)).
 
     ensure b "message"
         Fail unless b.  This is Haskell's assert; in Lean, assert is a
@@ -239,6 +247,14 @@ EFFECTS
 
     evalIO turns an exception into a failure of the test.  The
     assertions above work in TestT m for any monad m.
+
+    A group holds properties of one monad.  p.lift takes a property
+    to a monad that its own lifts to, so a pure one fits in a group
+    of IO:
+
+        checkGroup "files" [
+          ("reverse reverse", reverseReverse.lift),
+          ("a file reads back", fileRoundTrip)]
 
 RUNNING
     check p "name"

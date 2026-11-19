@@ -107,6 +107,22 @@ def ne [BEq α] [Repr α] (x y : α) : TestT m Unit :=
   else failWith
     s!"/== failed\n  lhs: {hang 7 (reprStr x)}\n  rhs: {hang 7 (reprStr y)}"
 
+/-- Bytes in hexadecimal, for `forAllWith`: a byte array has no `Repr`
+in core, and as a list of numbers it fills a report. -/
+def bytesHex (bytes : ByteArray) : String :=
+  String.join (bytes.toList.map fun b =>
+    let digits := Nat.toDigits 16 b.toNat
+    String.ofList (if digits.length = 1 then '0' :: digits else digits))
+
+/-- Equality of the results of a decoder into `Except`, which core does
+not give: `===` and `tripping` need it.  It is scoped, so only a file
+that opens `Hedgehog` has it. -/
+scoped instance {ε : Type} [BEq ε] [BEq α] : BEq (Except ε α) where
+  beq
+    | .ok x, .ok y => x == y
+    | .error e, .error f => e == f
+    | _, _ => false
+
 @[inherit_doc] scoped infix:50 " === " => eq
 @[inherit_doc] scoped infix:50 " /== " => ne
 
@@ -175,6 +191,15 @@ def withDiscards (n : Nat) (p : Property m) : Property m :=
 
 def withShrinks (n : Nat) (p : Property m) : Property m :=
   { p with config.shrinks := n }
+
+/-- The property in a monad that `m` lifts to, so that a pure property
+and one with effects fit in one group. -/
+def lift {n : Type → Type} [MonadLiftT m n] (p : Property m) :
+    Property n :=
+  { config := p.config
+    test := (fun (test : TestT m Unit) =>
+      (ExceptT.mk fun journal => liftM (test.run.run journal) :
+        TestT n Unit)) <$> p.test }
 
 end Property
 end Hedgehog
