@@ -1,5 +1,5 @@
 name = "hedgehog"
-version = "0.2.0"
+version = "0.2.1"
 description = "Property-based testing with integrated shrinking."
 keywords = ["testing", "property-based-testing", "shrinking"]
 homepage = "https://github.com/hedgehogqa/lean-hedgehog"
