@@ -1,6 +1,6 @@
 lean-hedgehog NEWS -- history of user-visible changes.
 
-0.2.0 (unreleased)
+0.2.0 (2026-11-19)
 
   - Coverage: classify, cover, label and collect count the kinds of
     test case a property names, and the report lists each with its
@@ -19,6 +19,10 @@ lean-hedgehog NEWS -- history of user-visible changes.
     component.  Command.gen and Command.fixed take the state after
     the context, and CommandWrapper has the field next; a list of
     them given to scenario is unchanged.
+  - Not ported yet: the confidence of withConfidence and
+    verifiedTermination, symbolic variables and parallel state machine
+    testing, floating-point generators, diffs of the two sides of ===,
+    test discovery.
 
 0.1.0 (2026-11-18)
 
