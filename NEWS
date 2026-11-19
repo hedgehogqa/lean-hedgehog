@@ -1,5 +1,13 @@
 lean-hedgehog NEWS -- history of user-visible changes.
 
+0.3.0 (unreleased)
+
+  - Incompatible: Config is PropertyConfig and Log is JournalEntry.
+    Both short names met a Config and a Log of the code under test
+    when a file opened Hedgehog beside it.  Code that sets a
+    configuration with withTests and reads a journal by its
+    constructors is unchanged.
+
 0.2.1 (2026-11-19)
 
   - checkGroup takes a Selection: which properties to check, by parts

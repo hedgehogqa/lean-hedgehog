@@ -20,7 +20,7 @@ the test case and once for each shrink it tries.
 namespace Hedgehog
 
 /-- A line of a test's journal. -/
-inductive Log where
+inductive JournalEntry where
   /-- A value drawn by `forAll`. -/
   | input (value : String)
   /-- Text added by `annotate`. -/
@@ -32,7 +32,7 @@ inductive Log where
   deriving Repr, BEq, Inhabited
 
 /-- What a test logged, in order. -/
-abbrev Journal := Array Log
+abbrev Journal := Array JournalEntry
 
 /-- Why a test failed. -/
 structure Failure where
@@ -155,7 +155,7 @@ def forAll {α : Type} [Repr α] (g : Gen α) : PropertyM α :=
   forAllWith reprStr g
 
 /-- When a property is done. -/
-structure Config where
+structure PropertyConfig where
   /-- Test cases that must pass. -/
   tests : Nat := 100
   /-- Discarded test cases after which the runner gives up. -/
@@ -167,7 +167,7 @@ structure Config where
 /-- A property: the generating part, which returns the part to run in
 `m`. -/
 structure Property (m : Type → Type) where
-  config : Config := {}
+  config : PropertyConfig := {}
   test : PropertyM (TestT m Unit)
 
 /-- A pure property. -/
