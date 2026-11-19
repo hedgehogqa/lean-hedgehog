@@ -85,6 +85,34 @@ def selections (mode : Mode) : List (Option (List String)) :=
       | .label name .. => [name]
     | none => none
 
+/-- The numbers of resets a scenario draws on two hundred seeds, at the
+largest size. -/
+def lengths (p : Property Id) : List (Option Nat) :=
+  (List.range 200).map fun i =>
+    match (p.withShrinks 0 |>.test.run.run #[]).run 99 (Seed.ofNat i)
+      |>.value with
+    | some (_, journal) => journal.toList.head?.map fun
+      | .input value => (value.splitOn "RESET").length - 1
+      | _ => 0
+    | none => none
+
+/-- The counter from a start between 0 and `top`, with a setup that
+adds `extra`. -/
+def startsAt (top extra : Nat) (mode : Mode) : Property Id :=
+  scenarioFrom (State.mk <$> Gen.nat (.constant 0 top)) mode
+    (Context.mk 1) [Command.fixed (Increment.mk 1)] (.constant 1 1)
+    fun s => do
+      annotate s!"started at {s.value}"
+      pure { s with value := s.value + extra }
+
+/-- The start a failing scenario reports. -/
+def start (r : Report) : Option String :=
+  match r.status with
+  | .failed c => c.journal.toList.findSome? fun
+    | .note text => text.dropPrefix? "started at " |>.map (·.toString)
+    | _ => none
+  | _ => none
+
 def facts : List (String × Bool) := [
   ("a command whose check fails is skipped",
     execute [Command.wrap ({} : Reset), Command.wrap (Increment.mk 5),
@@ -120,6 +148,27 @@ def facts : List (String × Bool) := [
   ("madhouse mode reorders", (selections .madhouse).any
     fun x => x.any fun labels => labels[0]?.any (·.startsWith "[RESET")),
   ("madhouse mode runs a hundred tests",
-    (counter .madhouse).config.tests == 100)]
+    (counter .madhouse).config.tests == 100),
+  ("madhouse mode takes a range of lengths",
+    (lengths (scenario .madhouse (Context.mk 1) [Command.gen Reset]
+      (.constant 20 30))).all
+        fun n => n.any fun n => 20 ≤ n && n ≤ 30),
+  ("deterministic mode ignores the range",
+    (lengths (scenario .deterministic (Context.mk 1) [Command.gen Reset]
+      (.constant 20 30))).all (· == some 1)),
+  ("a scenario passes from a start that leaves room",
+    (List.range 20).all fun i =>
+      ((startsAt 99 0 .madhouse).report (Seed.ofNat i)).ok),
+  ("a scenario starts from the generated state, shrunk",
+    (List.range 20).all fun i =>
+      start ((startsAt 200 0 .madhouse).report (Seed.ofNat i))
+        == some "100"),
+  ("the setup runs before the first command",
+    (List.range 20).all fun i =>
+      start ((startsAt 200 40 .madhouse).report (Seed.ofNat i))
+        == some "60"),
+  ("deterministic mode starts from the generated state too",
+    (List.range 20).any fun i =>
+      !((startsAt 200 0 .deterministic).report (Seed.ofNat i)).ok)]
 
 end HedgehogTest.Madhouse

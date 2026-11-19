@@ -6,6 +6,9 @@ lean-hedgehog NEWS -- history of user-visible changes.
     test case a property names, and the report lists each with its
     percentage.  A property whose tests pass fails when a kind stays
     below the minimum that cover asks for.
+  - scenario takes a range of lengths for madhouse mode and a setup
+    that runs before the first command.  scenarioFrom generates the
+    start state, which no longer needs a default.
   - Incompatible: Log has the constructor label, Status the constructor
     uncovered, and Report the field coverage.  A match on Log or
     Status needs the new case, and ⟨tests, discards, status⟩ a fourth

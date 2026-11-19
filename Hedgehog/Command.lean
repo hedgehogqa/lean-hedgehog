@@ -93,22 +93,39 @@ def executeCommands (commands : List (CommandWrapper σ m)) (s : σ) :
       c.apply s
     else pure s
 
-/-- A scenario over the commands, from the default state.  A failing
-scenario shrinks to fewer and smaller commands in both modes.  The
-`deterministic` mode runs one test; `madhouse` runs sequences of 1 to 15
-commands, a hundred times unless the configuration is changed. -/
-def scenario [Inhabited σ] (mode : Mode) (ctx : χ)
-    (commands : List (χ → Gen (CommandWrapper σ m))) : Property m :=
+/-- A scenario over the commands, from a generated state.  A failing
+scenario shrinks to fewer and smaller commands in both modes, and to a
+smaller state.  The `deterministic` mode runs one test; `madhouse` runs
+sequences of a length in `range`, a hundred times unless the
+configuration is changed.
+
+`setup` runs in the test before the first command, on the generated
+state: it is where a system under test is started and its handle put in
+the state.  The state is not shown in a report, since it need not have
+a `Repr`; `setup` may `annotate` it. -/
+def scenarioFrom (init : Gen σ) (mode : Mode) (ctx : χ)
+    (commands : List (χ → Gen (CommandWrapper σ m)))
+    (range : Range Nat := .linear 1 15)
+    (setup : σ → TestT m σ := pure) : Property m :=
   let gens := commands.map (· ctx)
   let test (g : Gen (List (CommandWrapper σ m))) :
       PropertyM (TestT m Unit) := do
+    let s ← liftM init
     let cs ← forAll g
-    pure ((fun _ => ()) <$> executeCommands cs default)
+    pure do
+      let _ ← executeCommands cs (← setup s)
   match mode with
   | .deterministic =>
     { config := { tests := 1 }, test := test (Gen.sequence gens) }
   | .madhouse =>
-    { test := test (Gen.list (.linear 1 15) (Gen.choice gens)) }
+    { test := test (Gen.list range (Gen.choice gens)) }
+
+/-- A scenario over the commands, from the default state. -/
+def scenario [Inhabited σ] (mode : Mode) (ctx : χ)
+    (commands : List (χ → Gen (CommandWrapper σ m)))
+    (range : Range Nat := .linear 1 15)
+    (setup : σ → TestT m σ := pure) : Property m :=
+  scenarioFrom (pure default) mode ctx commands range setup
 
 end Scenario
 end Hedgehog

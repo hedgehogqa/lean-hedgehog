@@ -373,7 +373,22 @@ STATE MACHINES, COMMANDS AS TYPES
           pure (if ok then 0 else 1)
 
     The scenario starts from the default state (Inhabited) and skips
-    a command whose check fails.
+    a command whose check fails.  It takes two more arguments, a range
+    of lengths for madhouse mode and a setup that runs in the test
+    before the first command, where a system under test is started:
+
+        scenario mode ctx commands (.linear 1 200) fun s => do
+          pure { s with handle := ← evalIO start }
+
+    scenarioFrom takes a generator of the start state first, and
+    needs no default:
+
+        scenarioFrom (State.mk <$> Gen.nat (.linear 0 90)) mode
+          (Context.mk 50) [Command.gen Increment, Command.gen Reset]
+
+    A failing scenario then shrinks its start state too.  The state
+    need not have a Repr, so a report does not show it; annotate it in
+    the setup to see it.
 
     Mode.deterministic
         One test: each command once, in the order given.  This is the
@@ -381,8 +396,8 @@ STATE MACHINES, COMMANDS AS TYPES
 
     Mode.madhouse
         A hundred tests, each a random sequence of 1 to 15 commands
-        drawn from the list.  Mode.fromEnv gives it when the
-        environment has MADHOUSE=1.
+        drawn from the list, or of a length in the range given.
+        Mode.fromEnv gives it when the environment has MADHOUSE=1.
 
     The scenario above passes in order and fails in madhouse mode:
 
