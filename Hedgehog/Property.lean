@@ -25,6 +25,10 @@ inductive Log where
   | input (value : String)
   /-- Text added by `annotate`. -/
   | note (text : String)
+  /-- A class of test cases named by `cover`, `classify`, `label` or
+  `collect`: whether this case is in it, and the percentage of cases
+  that must be. -/
+  | label (name : String) (minimum : Nat) (covered : Bool)
   deriving Repr, BEq, Inhabited
 
 /-- What a test logged, in order. -/
@@ -49,6 +53,27 @@ variable {m : Type → Type} [Monad m] {α β : Type}
 /-- Add a line to the journal, shown if the test fails. -/
 def annotate (text : String) : TestT m Unit :=
   modify (·.push (.note text))
+
+/-- Count the test case under `name` when `covered`, and require that
+at least `minimum` percent of the test cases are.  The report lists
+each name with its percentage, and a property whose tests all pass
+still fails when a name stays below its minimum. -/
+def cover (minimum : Nat) (name : String) (covered : Bool) :
+    TestT m Unit :=
+  modify (·.push (.label name minimum covered))
+
+/-- Count the test case under `name` when `covered`.  The report shows
+the percentage and requires none. -/
+def classify (name : String) (covered : Bool) : TestT m Unit :=
+  cover 0 name covered
+
+/-- Count the test case under `name`. -/
+def label (name : String) : TestT m Unit :=
+  cover 0 name true
+
+/-- Count the test case under the value, as `Repr` shows it. -/
+def collect [Repr α] (x : α) : TestT m Unit :=
+  label (reprStr x)
 
 /-- Fail the test. -/
 def failWith (message : String) : TestT m α :=

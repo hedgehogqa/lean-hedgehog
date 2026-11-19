@@ -179,6 +179,50 @@ PROPERTIES
     (100), the discards after which the runner gives up (100), and the
     shrinks after which it reports what it has (1000).
 
+COVERAGE
+    A property that passes may still test little: most of its cases
+    may be empty lists, or requests that are refused before the code
+    under test sees them.  Name the kinds of case that matter, and the
+    report says how many of each there were:
+
+        def sorted : Property Id := (property do
+          let xs ← forAll (Gen.list (.linear 0 50) (Gen.nat (.linear 0 100)))
+          classify "empty" xs.isEmpty
+          cover 30 "long" (xs.length > 10)
+          cover 30 "has a duplicate" (xs.eraseDups.length < xs.length)
+          xs.mergeSort.length === xs.length).withTests 500
+
+        ✓ sort keeps the length passed 500 tests.
+            9.4% empty
+           43.8% long, at least 30%
+           53.4% has a duplicate, at least 30%
+
+    classify "name" b
+        Count the test case under the name when b.
+
+    cover n "name" b
+        The same, and require that at least n percent of the test
+        cases are counted.  When all tests pass and fewer are, the
+        property fails:
+
+        ✗ zero is common passed 100 tests, with insufficient coverage.
+            3.0% zero, at least 10% ✗
+
+    label "name", collect x
+        Count every test case that reaches the line, under the name or
+        under the value as Repr shows it.
+
+    Only test cases that pass are counted, each once for a name however
+    often it names it.  The percentage is of all test cases, also of
+    those that never reached the line: a cover in a command asks for a
+    share of all sequences, not of the sequences that ran the command.
+    It is checked once, after the last test, so set a minimum well
+    below what the generator gives: a minimum near it fails on some
+    seeds.  recheck runs one test case
+    and requires no minimum.  These work in TestT m as the assertions
+    do, so a test with effects can classify by what the system
+    answered.
+
 EFFECTS
     Generators are pure.  A property whose test has effects generates
     first and returns the test, a TestT m Unit, which the runner runs
@@ -367,6 +411,10 @@ DIFFERENCES FROM HASKELL HEDGEHOG
     - A discard is a value in the tree, where Haskell prunes with
       MaybeT.
     - assert is ensure.
+    - cover takes a whole percentage and checks it once, after the
+      last test.  The confidence of withConfidence and
+      verifiedTermination, which draw more tests until the percentage
+      is settled, is not ported.
     - Range.exponential uses integer roots, not floating point.
     - State machine testing follows proptest-state-machine and
       madhouse-rs, not Hedgehog's Command with symbolic variables.

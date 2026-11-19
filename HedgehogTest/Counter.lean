@@ -162,7 +162,7 @@ def facts : IO (List (String × Bool)) := do
         | .input v =>
           let n := ((v.drop 1).takeWhile Char.isDigit).toString.toNat?
           n.any (· + (v.splitOn "Step.inc").length - 1 == 50)
-        | .note _ => false
+        | _ => false
       | _ => false)]
 
 end HedgehogTest.Counter

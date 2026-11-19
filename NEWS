@@ -1,5 +1,16 @@
 lean-hedgehog NEWS -- history of user-visible changes.
 
+0.2.0 (unreleased)
+
+  - Coverage: classify, cover, label and collect count the kinds of
+    test case a property names, and the report lists each with its
+    percentage.  A property whose tests pass fails when a kind stays
+    below the minimum that cover asks for.
+  - Incompatible: Log has the constructor label, Status the constructor
+    uncovered, and Report the field coverage.  A match on Log or
+    Status needs the new case, and ⟨tests, discards, status⟩ a fourth
+    component.
+
 0.1.0 (2026-11-18)
 
   - Generators with integrated shrinking: Gen, Range, Seed, Tree.

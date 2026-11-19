@@ -126,7 +126,7 @@ def inputs (r : Report) : Option (List String) :=
   match r.status with
   | .failed c => some (c.journal.toList.filterMap fun
     | .input value => some value
-    | .note _ => none)
+    | _ => none)
   | _ => none
 
 /-- Whether the property fails on each of twenty seeds, shrunk to one of

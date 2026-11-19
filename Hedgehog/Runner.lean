@@ -28,9 +28,58 @@ structure Counterexample where
   failure : Failure
   deriving Repr, BEq, Inhabited
 
+/-- A class of test cases, and how many of those that passed are in
+it. -/
+structure Label where
+  name : String
+  /-- The percentage of test cases that must be in the class. -/
+  minimum : Nat
+  count : Nat
+  deriving Repr, BEq, Inhabited
+
+/-- Whether a class has its minimum among `tests` test cases. -/
+def Label.covered (l : Label) (tests : Nat) : Bool :=
+  l.count * 100 ≥ l.minimum * tests
+
+/-- The classes the test cases named, in the order they first did. -/
+abbrev Coverage := Array Label
+
+namespace Coverage
+
+/-- The classes of one test case.  A class named twice is counted once,
+and keeps the greater minimum. -/
+def ofJournal (journal : Journal) : Coverage :=
+  journal.foldl (init := #[]) fun coverage log =>
+    match log with
+    | .label name minimum covered =>
+      let count := if covered then 1 else 0
+      match coverage.findIdx? (·.name == name) with
+      | some i => coverage.modify i fun l =>
+        { l with minimum := max l.minimum minimum,
+                 count := max l.count count }
+      | none => coverage.push ⟨name, minimum, count⟩
+    | _ => coverage
+
+/-- Add the classes of one more test case. -/
+def add (coverage one : Coverage) : Coverage :=
+  one.foldl (init := coverage) fun coverage l =>
+    match coverage.findIdx? (·.name == l.name) with
+    | some i => coverage.modify i fun k =>
+      { k with minimum := max k.minimum l.minimum,
+               count := k.count + l.count }
+    | none => coverage.push l
+
+/-- Whether every class has its minimum. -/
+def sufficient (coverage : Coverage) (tests : Nat) : Bool :=
+  coverage.all (·.covered tests)
+
+end Coverage
+
 inductive Status where
   | ok
   | gaveUp
+  /-- Every test case passed, and a class of `cover` has too few. -/
+  | uncovered
   | failed (counterexample : Counterexample)
   deriving Repr, BEq, Inhabited
 
@@ -41,6 +90,8 @@ structure Report where
   /-- Test cases that were discarded. -/
   discards : Nat
   status : Status
+  /-- The classes of the test cases that passed. -/
+  coverage : Coverage := #[]
   deriving Repr, BEq, Inhabited
 
 def Report.ok (r : Report) : Bool :=
@@ -57,7 +108,7 @@ abbrev Case (m : Type → Type) :=
 
 inductive Outcome where
   | discard
-  | pass
+  | pass (journal : Journal)
   | fail (journal : Journal) (failure : Failure)
 
 def runCase : Case m → m Outcome
@@ -65,7 +116,7 @@ def runCase : Case m → m Outcome
   | some (.error e, journal) => pure (.fail journal e)
   | some (.ok test, journal) => do
     match ← test.run.run journal with
-    | (.ok (), _) => pure .pass
+    | (.ok (), journal) => pure (.pass journal)
     | (.error e, journal) => pure (.fail journal e)
 
 /-- The first shrink that fails. -/
@@ -92,43 +143,49 @@ def shrink :
 def tree (p : Property m) (size : Size) (seed : Seed) : Tree (Case m) :=
   (p.test.run.run #[]).run size seed
 
-/-- Run the test case of a size and seed, and shrink it if it fails. -/
+/-- Run the test case of a size and seed, and shrink it if it fails.
+A passing test case gives its classes, a discarded one nothing. -/
 def runTest (p : Property m) (size : Size) (seed : Seed) :
-    m (Option Status) := do
+    m (Option (Except Counterexample Coverage)) := do
   let t := p.tree size seed
   match ← runCase t.value with
-  | .pass => pure (some .ok)
+  | .pass journal => pure (some (.ok (.ofJournal journal)))
   | .discard => pure none
   | .fail journal e =>
     let (shrinks, journal, e) ← shrink p.config.shrinks 0 t journal e
-    pure (some (.failed ⟨size, seed, shrinks, journal, e⟩))
+    pure (some (.error ⟨size, seed, shrinks, journal, e⟩))
 
 def loop (p : Property m) :
-    (fuel tests discards : Nat) → Size → Seed → m Report
-  | 0, tests, discards, _, _ => pure ⟨tests, discards, .gaveUp⟩
-  | fuel + 1, tests, discards, size, seed =>
-    if tests ≥ p.config.tests then pure ⟨tests, discards, .ok⟩
+    (fuel tests discards : Nat) → Coverage → Size → Seed → m Report
+  | 0, tests, discards, coverage, _, _ =>
+    pure ⟨tests, discards, .gaveUp, coverage⟩
+  | fuel + 1, tests, discards, coverage, size, seed =>
+    if tests ≥ p.config.tests then
+      let status := if coverage.sufficient tests then .ok else .uncovered
+      pure ⟨tests, discards, status, coverage⟩
     else if discards ≥ p.config.discards then
-      pure ⟨tests, discards, .gaveUp⟩
+      pure ⟨tests, discards, .gaveUp, coverage⟩
     else do
       let (s1, s2) := seed.split
       let size' := if size ≥ 99 then 0 else size + 1
       match ← p.runTest size s1 with
-      | some .ok => loop p fuel (tests + 1) discards size' s2
-      | some status => pure ⟨tests, discards, status⟩
-      | none => loop p fuel tests (discards + 1) size' s2
+      | some (.ok one) =>
+        loop p fuel (tests + 1) discards (coverage.add one) size' s2
+      | some (.error c) => pure ⟨tests, discards, .failed c, coverage⟩
+      | none => loop p fuel tests (discards + 1) coverage size' s2
 
 /-- Check the property on test cases drawn from `seed`. -/
 def report (p : Property m) (seed : Seed) : m Report :=
-  loop p (p.config.tests + p.config.discards + 1) 0 0 0 seed
+  loop p (p.config.tests + p.config.discards + 1) 0 0 #[] 0 seed
 
 /-- Check the one test case of a size and seed, as a failure report
-names them. -/
+names them.  One test case says nothing of coverage, so a minimum is
+not required of it. -/
 def recheck (p : Property m) (size : Size) (seed : Seed) : m Report := do
   match ← p.runTest size seed with
-  | some .ok => pure ⟨1, 0, .ok⟩
-  | some status => pure ⟨0, 0, status⟩
-  | none => pure ⟨0, 1, .gaveUp⟩
+  | some (.ok one) => pure ⟨1, 0, .ok, one⟩
+  | some (.error c) => pure ⟨0, 0, .failed c, #[]⟩
+  | none => pure ⟨0, 1, .gaveUp, #[]⟩
 
 end Property
 
@@ -137,17 +194,38 @@ namespace Report
 def count (n : Nat) (noun : String) : String :=
   if n = 1 then s!"1 {noun}" else s!"{n} {noun}s"
 
+/-- A count as a percentage of `tests`, to one decimal place. -/
+def percent (n tests : Nat) : String :=
+  let tenths := if tests = 0 then 0 else (n * 1000 + tests / 2) / tests
+  s!"{tenths / 10}.{tenths % 10}%"
+
+/-- One line for each class: its percentage and name, the minimum it
+must have, and a mark when it has less. -/
+def renderCoverage (r : Report) : String :=
+  String.join (r.coverage.toList.map fun l =>
+    let share := percent l.count r.tests
+    let need := if l.minimum = 0 then ""
+      else if l.covered r.tests then
+        s!", at least {l.minimum}%"
+      else s!", at least {l.minimum}% ✗"
+    s!"\n    {"".pushn ' ' (6 - share.length)}{share} {l.name}{need}")
+
 /-- The report as `check` prints it. -/
 def render (name : String) (r : Report) : String :=
   match r.status with
-  | .ok => s!"  ✓ {name} passed {count r.tests "test"}."
+  | .ok =>
+    s!"  ✓ {name} passed {count r.tests "test"}.{renderCoverage r}"
+  | .uncovered =>
+    s!"  ✗ {name} passed {count r.tests "test"}, \
+      with insufficient coverage.{renderCoverage r}"
   | .gaveUp =>
     s!"  ⚐ {name} gave up after {count r.discards "discard"}, \
-      passed {count r.tests "test"}."
+      passed {count r.tests "test"}.{renderCoverage r}"
   | .failed c =>
-    let logs := c.journal.toList.map fun
-      | .input value => s!"forAll {hang 11 value}"
-      | .note text => hang 4 text
+    let logs := c.journal.toList.filterMap fun
+      | .input value => some s!"forAll {hang 11 value}"
+      | .note text => some (hang 4 text)
+      | .label .. => none
     let body := logs ++ [hang 4 c.failure.message]
     let seed := s!"⟨{c.seed.value}, {c.seed.gamma}⟩"
     s!"  ✗ {name} failed after {count (r.tests + 1) "test"} and \

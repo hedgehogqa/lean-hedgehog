@@ -14,7 +14,7 @@ def counterexample (r : Report) : Option (List String × String) :=
   match r.status with
   | .failed c => some (c.journal.toList.filterMap (fun
     | .input value => some value
-    | .note _ => none), c.failure.message)
+    | _ => none), c.failure.message)
   | _ => none
 
 /-- Whether the property fails on each of twenty seeds with one of the

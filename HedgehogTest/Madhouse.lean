@@ -51,7 +51,7 @@ executed nothing else. -/
 def amounts (c : Counterexample) : Option (List Nat) :=
   (c.journal.toList.filterMap fun
     | .note text => some text
-    | .input _ => none).mapM fun text =>
+    | _ => none).mapM fun text =>
       ((text.dropPrefix? "executed INCREMENT(").bind
         (·.dropSuffix? ")")).bind (·.toNat?)
 
@@ -70,7 +70,8 @@ def execute (commands : List (CommandWrapper State Id)) :
   match Id.run ((executeCommands commands default).run.run #[]) with
   | (.ok s, journal) => some (s.value, journal.toList.map fun
     | .note text => text
-    | .input value => value)
+    | .input value => value
+    | .label name .. => name)
   | (.error _, _) => none
 
 /-- The labels the scenario draws on two hundred seeds. -/
@@ -81,6 +82,7 @@ def selections (mode : Mode) : List (Option (List String)) :=
     | some (_, journal) => journal.toList.head?.map fun
       | .input value => value.splitOn ", "
       | .note text => [text]
+      | .label name .. => [name]
     | none => none
 
 def facts : List (String × Bool) := [
@@ -106,7 +108,8 @@ def facts : List (String × Bool) := [
       (Seed.ofNat i)).value.any fun c =>
         ["INCREMENT(1)", "INCREMENT(2)", "INCREMENT(3)"].contains c.label),
   ("deterministic mode runs one test",
-    ((counter .deterministic).report (Seed.ofNat 0)).run == ⟨1, 0, .ok⟩),
+    ((counter .deterministic).report (Seed.ofNat 0)).run
+      == ⟨1, 0, .ok, #[]⟩),
   ("deterministic mode keeps the order", (selections .deterministic).all
     fun x => x.any fun labels => labels.length == 3
       && (labels[0]?.any (·.startsWith "[INCREMENT("))

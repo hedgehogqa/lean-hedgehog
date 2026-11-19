@@ -93,13 +93,83 @@ def failed (r : Report) : Option Counterexample :=
   | .failed c => some c
   | _ => none
 
+/-- A third of the cases are small; the minimum asked of them varies. -/
+def classified (minimum : Nat) : Property Id := property do
+  let n ← forAll (Gen.nat (.constant 0 2))
+  cover minimum "small" (n == 0)
+  classify "large" (n == 2)
+  label "any"
+  collect (n == 1)
+
+/-- A class named twice in one test case. -/
+def twice : Property Id := property do
+  cover 10 "a" false
+  cover 60 "a" true
+  label "a"
+
+/-- A class that only the even cases name, each of them in it. -/
+def halfNamed (minimum : Nat) : Property Id := property do
+  let n ← forAll (Gen.nat (.constant 0 999))
+  if n % 2 == 0 then cover minimum "even" true
+
+/-- The count of a class of a report. -/
+def countOf (r : Report) (name : String) : Option Nat :=
+  (r.coverage.find? (·.name == name)).map (·.count)
+
+def coverage : List (String × Bool) :=
+  let r := ((classified 20).withTests 300 |>.report (Seed.ofNat 0)).run
+  let low := ((classified 90).withTests 300 |>.report (Seed.ofNat 0)).run
+  let two := (twice.report (Seed.ofNat 0)).run
+  let none := ((counts true).report (Seed.ofNat 0)).run
+  let labelled := ((property do label "a"; failure).report
+    (Seed.ofNat 0)).run
+  let third (n : Option Nat) := n.any fun n => 70 ≤ n && n ≤ 130
+  [("the journal has the class", (run (cover 5 "a" true)).2
+      == #[.label "a" 5 true]),
+   ("classify asks for no minimum", (run (classify "a" false)).2
+      == #[.label "a" 0 false]),
+   ("label counts every case", (run (label "a")).2
+      == #[.label "a" 0 true]),
+   ("collect names the value", (run (collect (3 : Nat))).2
+      == #[.label "3" 0 true]),
+   ("no class, no coverage", none.coverage == #[]),
+   ("classes are in the order they were named",
+     r.coverage.toList.map (·.name) == ["small", "large", "any", "false",
+       "true"]),
+   ("cover counts the cases that are in the class",
+     third (countOf r "small")),
+   ("classify counts them too", third (countOf r "large")),
+   ("label counts every case of the run", countOf r "any" == some 300),
+   ("collect counts each value",
+     (do pure ((← countOf r "true") + (← countOf r "false"))) == some 300),
+   ("a minimum that is met passes", r.ok && r.tests == 300),
+   ("a minimum that is not met fails",
+     low.status == .uncovered && !low.ok && low.tests == 300),
+   ("an unmet minimum has no counterexample", (failed low).isNone),
+   ("a class named twice is counted once", countOf two "a" == some 100),
+   ("a class named twice keeps the greater minimum",
+     two.coverage.map (·.minimum) == #[60] && two.ok),
+   ("a failing case is not counted", labelled.coverage == #[]
+     && (failed labelled).isSome),
+   ("recheck gives the classes of its case and asks no minimum",
+     let one := ((classified 90).recheck 10 (Seed.ofNat 0)).run
+     one.ok && countOf one "any" == some 1),
+   ("a case that does not name a class counts against its minimum",
+     ((halfNamed 30).withTests 300 |>.report (Seed.ofNat 0)).run.ok
+       && ((halfNamed 70).withTests 300 |>.report (Seed.ofNat 0)).run.status
+         == .uncovered),
+   ("exactly the minimum is enough",
+     Coverage.sufficient #[⟨"a", 25, 25⟩] 100
+       && !Coverage.sufficient #[⟨"a", 25, 24⟩] 100),
+   ("no test, no shortfall", Coverage.sufficient #[⟨"a", 25, 0⟩] 0)]
+
 def runner : List (String × Bool) := [
   ("a hundred tests by default",
-    ((counts true).report (Seed.ofNat 0)).run == ⟨100, 0, .ok⟩),
+    ((counts true).report (Seed.ofNat 0)).run == ⟨100, 0, .ok, #[]⟩),
   ("withTests", ((counts true).withTests 7 |>.report (Seed.ofNat 0)).run
-    == ⟨7, 0, .ok⟩),
+    == ⟨7, 0, .ok, #[]⟩),
   ("withTests 0", ((counts false).withTests 0 |>.report (Seed.ofNat 0)).run
-    == ⟨0, 0, .ok⟩),
+    == ⟨0, 0, .ok, #[]⟩),
   ("a failure stops the run",
     ((counts false).report (Seed.ofNat 0)).tests == 0),
   ("discards are counted",
@@ -127,9 +197,9 @@ def runner : List (String × Bool) := [
   ("the size starts at 0 and wraps after 99",
     sizes.take 3 == [0, 1, 2] && (sizes.drop 99).take 3 == [99, 0, 1]),
   ("recheck of a passing case",
-    ((counts true).recheck 10 (Seed.ofNat 0)).run == ⟨1, 0, .ok⟩),
+    ((counts true).recheck 10 (Seed.ofNat 0)).run == ⟨1, 0, .ok, #[]⟩),
   ("recheck of a discarded case", (List.range 20).any fun i =>
-    (halfDiscarded.recheck 50 (Seed.ofNat i)).run == ⟨0, 1, .gaveUp⟩),
+    (halfDiscarded.recheck 50 (Seed.ofNat i)).run == ⟨0, 1, .gaveUp, #[]⟩),
   ("different seeds give different cases",
     (failed (large.withShrinks 0 |>.report (Seed.ofNat 1))).map (·.journal)
       != (failed (large.withShrinks 0 |>.report (Seed.ofNat 2))).map
@@ -139,17 +209,29 @@ def sample : Counterexample :=
   ⟨2, ⟨1, 2⟩, 1, #[.input "[0,\n 1]", .note "n"], ⟨"boom\nagain"⟩⟩
 
 def rendering : List (String × Bool) := [
-  ("ok", Report.render "p" ⟨100, 0, .ok⟩ == "  ✓ p passed 100 tests."),
-  ("one test", Report.render "p" ⟨1, 0, .ok⟩ == "  ✓ p passed 1 test."),
-  ("gave up", Report.render "p" ⟨3, 100, .gaveUp⟩
+  ("ok", Report.render "p" ⟨100, 0, .ok, #[]⟩
+    == "  ✓ p passed 100 tests."),
+  ("one test", Report.render "p" ⟨1, 0, .ok, #[]⟩
+    == "  ✓ p passed 1 test."),
+  ("classes", Report.render "p" ⟨200, 0, .ok, #[⟨"small", 0, 1⟩,
+      ⟨"large", 10, 200⟩, ⟨"half", 50, 100⟩]⟩
+    == "  ✓ p passed 200 tests.\n      0.5% small\n    \
+      100.0% large, at least 10%\n     50.0% half, at least 50%"),
+  ("insufficient coverage", Report.render "p" ⟨100, 0, .uncovered,
+      #[⟨"rare", 10, 3⟩, ⟨"any", 0, 100⟩]⟩
+    == "  ✗ p passed 100 tests, with insufficient coverage.\n      \
+      3.0% rare, at least 10% ✗\n    100.0% any"),
+  ("classes of no test", Report.render "p" ⟨0, 0, .ok, #[⟨"a", 0, 0⟩]⟩
+    == "  ✓ p passed 0 tests.\n      0.0% a"),
+  ("gave up", Report.render "p" ⟨3, 100, .gaveUp, #[]⟩
     == "  ⚐ p gave up after 100 discards, passed 3 tests."),
-  ("failed", Report.render "p" ⟨0, 0, .failed sample⟩
+  ("failed", Report.render "p" ⟨0, 0, .failed sample, #[]⟩
     == "  ✗ p failed after 1 test and 1 shrink.\n\n    \
         forAll [0,\n            1]\n    n\n    boom\n    again\n\n    \
         This failure can be reproduced by running:\n    \
         > recheck 2 ⟨1, 2⟩ <property>"),
   ("failed, plural", (Report.render "p"
-    ⟨4, 0, .failed { sample with shrinks := 3 }⟩).startsWith
+    ⟨4, 0, .failed { sample with shrinks := 3 }, #[]⟩).startsWith
       "  ✗ p failed after 5 tests and 3 shrinks.")]
 
 /-- Whether the action throws an error that mentions `text`. -/
@@ -180,6 +262,8 @@ def effects : IO (List (String × Bool)) := do
     (checkGroup "group" [("good", counts true), ("bad", counts false)])
   let (goodGroup, goodOk) ← captured
     (checkGroup "group" [("good", counts true)])
+  let (_, lowOk) ← captured
+    (checkGroup "group" [("low", classified 90)])
   pure [
     ("evalIO turns an exception into a failure",
       (failed thrown).map (·.failure.message) == some "exception: boom"),
@@ -191,6 +275,10 @@ def effects : IO (List (String × Bool)) := do
         (check (counts false) "name")),
     ("check throws when it gives up", ← throwsWith "⚐ name gave up"
       (check (halfDiscarded.withDiscards 1) "name" (seed := some (.ofNat 0)))),
+    ("check throws on insufficient coverage",
+      ← throwsWith "✗ name passed 100 tests, with insufficient coverage"
+        (check (classified 90) "name" (seed := some (.ofNat 0)))),
+    ("checkGroup fails on insufficient coverage", !lowOk),
     ("check runs an IO property",
       ← throwsWith "exception: boom" (check throws "name")),
     ("recheck prints a pass", rechecked == "  ✓ name passed 1 test.\n"),

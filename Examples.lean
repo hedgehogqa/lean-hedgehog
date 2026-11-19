@@ -20,7 +20,7 @@ def expect (buggy : Bool) (name : String) (p : Property Id) : IO Bool := do
   pure <| match r.status with
     | .failed _ => buggy
     | .ok => !buggy
-    | .gaveUp => false
+    | .gaveUp | .uncovered => false
 
 def main : IO UInt32 := do
   let mode ← Mode.fromEnv

@@ -30,6 +30,7 @@ def main : IO UInt32 := do
     ← expectAll "generator shrinking" Generators.shrinking,
     ← expectAll "assertions" Runner.assertions,
     ← expectAll "runner" Runner.runner,
+    ← expectAll "coverage" Runner.coverage,
     ← expectAll "reports" Runner.rendering,
     ← expectAll "check and effects" (← Runner.effects),
     ← checkGroup "properties" Basic.properties,
