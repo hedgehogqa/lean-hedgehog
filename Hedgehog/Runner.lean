@@ -262,15 +262,67 @@ def recheck (size : Size) (seed : Seed) (p : Property m)
     (name : String := "property") : IO Unit := do
   finish name (← liftM (p.recheck size seed))
 
-/-- Check each property and print its report; `true` if all passed. -/
-def checkGroup (name : String) (properties : List (String × Property m)) :
-    IO Bool := do
+/-- Which properties of a group to check, and how. -/
+structure Selection where
+  /-- Check only the properties whose name holds one of these; every
+  property if there is none. -/
+  only : List String := []
+  /-- Check the one test case of this size and seed, as a failure
+  report names them, in place of a whole run. -/
+  recheck : Option (Size × Seed) := none
+  deriving Repr, BEq, Inhabited
+
+namespace Selection
+
+/-- Whether a property of this name is checked. -/
+def selects (s : Selection) (name : String) : Bool :=
+  s.only.isEmpty || s.only.any fun part => (name.splitOn part).length > 1
+
+/-- The size and seed of `"<size> <value> <gamma>"`, the three numbers
+of the line `recheck <size> ⟨<value>, <gamma>⟩` of a report. -/
+def parseRecheck (text : String) : Option (Size × Seed) :=
+  match (text.splitOn " ").filter (· != "") |>.map String.toNat? with
+  | [some size, some value, some gamma] =>
+    some (size, ⟨UInt64.ofNat value, UInt64.ofNat gamma⟩)
+  | _ => none
+
+/-- The selection that the environment asks for: `HEDGEHOG_ONLY` holds
+parts of names, separated by commas, and `HEDGEHOG_RECHECK` a size and
+the two numbers of a seed.  With neither, every property is checked. -/
+def fromEnv : IO Selection := do
+  let only := match ← IO.getEnv "HEDGEHOG_ONLY" with
+    | some text => (text.splitOn ",").filter (· != "")
+    | none => []
+  let recheck ← match ← IO.getEnv "HEDGEHOG_RECHECK" with
+    | none => pure none
+    | some text => match parseRecheck text with
+      | some found => pure (some found)
+      | none => throw (IO.userError
+        s!"HEDGEHOG_RECHECK: expected a size and two numbers of a \
+          seed, got {text.quote}")
+  pure { only, recheck }
+
+end Selection
+
+/-- Check each selected property and print its report; `true` if all
+passed.  With `mustFail`, `true` if each failed with a counterexample:
+this is for a group of findings, whose properties state what the code
+under test does not yet do. -/
+def checkGroup (name : String) (properties : List (String × Property m))
+    (select : Selection := {}) (mustFail : Bool := false) : IO Bool := do
+  let selected := properties.filter fun (name, _) => select.selects name
+  if selected.isEmpty then return true
   IO.println s!"━━━ {name} ━━━"
   let mut ok := true
-  for (name, p) in properties do
-    let r ← liftM (p.report (← Seed.random))
+  for (name, p) in selected do
+    let r ← match select.recheck with
+      | some (size, seed) => liftM (p.recheck size seed)
+      | none => liftM (p.report (← Seed.random))
     IO.println (r.render name)
-    ok := ok && r.ok
+    let failed := match r.status with
+      | .failed _ => true
+      | _ => false
+    ok := ok && (if mustFail then failed else r.ok)
   pure ok
 
 end Check

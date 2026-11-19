@@ -259,6 +259,30 @@ RUNNING
                 ("sorted", sorted)]
               pure (if ok then 0 else 1)
 
+    A group takes two more arguments.  A Selection says which
+    properties to check and how; Selection.fromEnv reads it from the
+    environment, so a driver replays what a report printed without a
+    change to its code:
+
+            let ok ← checkGroup "lists" properties (← Selection.fromEnv)
+
+        $ HEDGEHOG_ONLY=sorted lake test
+        $ HEDGEHOG_ONLY=sorted HEDGEHOG_RECHECK="26 16002631331520349156 \
+            1625543224293002313" lake test
+
+    HEDGEHOG_ONLY holds parts of names, separated by commas, and a
+    property is checked when its name holds one of them.
+    HEDGEHOG_RECHECK holds the size and the two numbers of the seed
+    of the line "recheck 26 ⟨16002631331520349156,
+    1625543224293002313⟩" of a failure; the selected properties then
+    run that one test case.  A group with no property selected prints
+    nothing.
+
+    (mustFail := true) is for a group of findings, whose properties
+    state what the code under test does not do yet: the group is true
+    when each property fails with a counterexample, and false when
+    one passes or gives up, which says the finding is gone.
+
     p.report seed
         The Report as a value, in the property's monad.  For a
         Property Id it is pure, so a property can be a #guard:

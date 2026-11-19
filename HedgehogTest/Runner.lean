@@ -264,6 +264,20 @@ def effects : IO (List (String × Bool)) := do
     (checkGroup "group" [("good", counts true)])
   let (_, lowOk) ← captured
     (checkGroup "group" [("low", classified 90)])
+  let both := [("good", counts true), ("bad", counts false)]
+  let (only, onlyOk) ← captured (checkGroup "group" both { only := ["oo"] })
+  let (nothing, noneOk) ← captured
+    (checkGroup "group" both { only := ["x"] })
+  let (_, findingsOk) ← captured
+    (checkGroup "group" [("bad", counts false)] (mustFail := true))
+  let (_, fixedOk) ← captured (checkGroup "group" both (mustFail := true))
+  let (_, gaveUpOk) ← captured (checkGroup "group"
+    [("gave up", halfDiscarded.withDiscards 1)] (mustFail := true))
+  let (again, againOk) ← captured (checkGroup "group" both
+    { only := ["good"], recheck := some (3, .ofNat 1) })
+  let unset := (← IO.getEnv "HEDGEHOG_ONLY").isNone
+    && (← IO.getEnv "HEDGEHOG_RECHECK").isNone
+  let fromEnv ← if unset then (· == {}) <$> Selection.fromEnv else pure true
   pure [
     ("evalIO turns an exception into a failure",
       (failed thrown).map (·.failure.message) == some "exception: boom"),
@@ -287,6 +301,27 @@ def effects : IO (List (String × Bool)) := do
     ("checkGroup reports a failure", !groupOk
       && group.startsWith
         "━━━ group ━━━\n  ✓ good passed 100 tests.\n  ✗ bad"),
+    ("checkGroup checks only the properties selected", onlyOk
+      && only == "━━━ group ━━━\n  ✓ good passed 100 tests.\n"),
+    ("checkGroup with nothing selected prints nothing", noneOk
+      && nothing == ""),
+    ("a group that must fail passes when each property fails",
+      findingsOk),
+    ("a group that must fail fails when a property passes", !fixedOk),
+    ("a group that must fail fails when a property gives up", !gaveUpOk),
+    ("checkGroup rechecks the one test case of a selection", againOk
+      && again == "━━━ group ━━━\n  ✓ good passed 1 test.\n"),
+    ("a selection reads the numbers of a report line",
+      Selection.parseRecheck "26 16002631331520349156 1625543224293002313"
+        == some (26, ⟨16002631331520349156, 1625543224293002313⟩)
+        && Selection.parseRecheck "26 1" == none
+        && Selection.parseRecheck "a 1 2" == none),
+    ("a selection with no name selects every property",
+      ({} : Selection).selects "any"
+        && ({ only := ["a", "b"] } : Selection).selects "xbx"
+        && !({ only := ["a", "b"] } : Selection).selects "xcx"),
+    ("an environment that asks for nothing selects every property",
+      fromEnv),
     ("checkGroup reports a pass", goodOk
       && goodGroup == "━━━ group ━━━\n  ✓ good passed 100 tests.\n")]
 

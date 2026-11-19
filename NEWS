@@ -1,5 +1,14 @@
 lean-hedgehog NEWS -- history of user-visible changes.
 
+0.2.1 (unreleased)
+
+  - checkGroup takes a Selection: which properties to check, by parts
+    of their names, and a size and seed to recheck in place of a run.
+    Selection.fromEnv reads both from HEDGEHOG_ONLY and
+    HEDGEHOG_RECHECK, so a driver replays a failure without a change.
+  - checkGroup takes mustFail, for a group of findings: it is true
+    when each property fails with a counterexample.
+
 0.2.0 (2026-11-19)
 
   - Coverage: classify, cover, label and collect count the kinds of
