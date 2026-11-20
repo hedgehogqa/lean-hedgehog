@@ -204,8 +204,11 @@ COVERAGE
 
         ✓ sort keeps the length passed 500 tests.
             9.4% empty
-           43.8% long, at least 30%
            53.4% has a duplicate, at least 30%
+           43.8% long, at least 30%
+
+    The report lists the kinds in the order of their names, since the
+    order they were first named in differs from run to run.
 
     classify "name" b
         Count the test case under the name when b.

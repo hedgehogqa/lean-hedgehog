@@ -222,14 +222,15 @@ def rendering : List (String × Bool) := [
     == "  ✓ p passed 100 tests."),
   ("one test", Report.render "p" ⟨1, 0, .ok, #[]⟩
     == "  ✓ p passed 1 test."),
-  ("classes", Report.render "p" ⟨200, 0, .ok, #[⟨"small", 0, 1⟩,
-      ⟨"large", 10, 200⟩, ⟨"half", 50, 100⟩]⟩
-    == "  ✓ p passed 200 tests.\n      0.5% small\n    \
-      100.0% large, at least 10%\n     50.0% half, at least 50%"),
+  ("classes, in the order of their names", Report.render "p"
+      ⟨200, 0, .ok, #[⟨"small", 0, 1⟩, ⟨"large", 10, 200⟩,
+        ⟨"half", 50, 100⟩]⟩
+    == "  ✓ p passed 200 tests.\n     50.0% half, at least 50%\n    \
+      100.0% large, at least 10%\n      0.5% small"),
   ("insufficient coverage", Report.render "p" ⟨100, 0, .uncovered,
       #[⟨"rare", 10, 3⟩, ⟨"any", 0, 100⟩]⟩
-    == "  ✗ p passed 100 tests, with insufficient coverage.\n      \
-      3.0% rare, at least 10% ✗\n    100.0% any"),
+    == "  ✗ p passed 100 tests, with insufficient coverage.\n    \
+      100.0% any\n      3.0% rare, at least 10% ✗"),
   ("classes of no test", Report.render "p" ⟨0, 0, .ok, #[⟨"a", 0, 0⟩]⟩
     == "  ✓ p passed 0 tests.\n      0.0% a"),
   ("gave up", Report.render "p" ⟨3, 100, .gaveUp, #[]⟩

@@ -199,10 +199,12 @@ def percent (n tests : Nat) : String :=
   let tenths := if tests = 0 then 0 else (n * 1000 + tests / 2) / tests
   s!"{tenths / 10}.{tenths % 10}%"
 
-/-- One line for each class: its percentage and name, the minimum it
-must have, and a mark when it has less. -/
+/-- One line for each class, in the order of the names: its percentage
+and name, the minimum it must have, and a mark when it has less.  The
+order the classes were first named in differs from run to run. -/
 def renderCoverage (r : Report) : String :=
-  String.join (r.coverage.toList.map fun l =>
+  let classes := r.coverage.toList.mergeSort fun a b => a.name ≤ b.name
+  String.join (classes.map fun l =>
     let share := percent l.count r.tests
     let need := if l.minimum = 0 then ""
       else if l.covered r.tests then
