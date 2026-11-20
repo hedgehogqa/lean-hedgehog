@@ -167,6 +167,14 @@ def coverage : List (String × Bool) :=
      ((halfNamed 30).withTests 300 |>.report (Seed.ofNat 0)).run.ok
        && ((halfNamed 70).withTests 300 |>.report (Seed.ofNat 0)).run.status
          == .uncovered),
+   ("a minimum is asked from coverFrom tests on",
+     ((classified 90).withTests 300 |>.withCoverFrom 301
+       |>.report (Seed.ofNat 0)).run.ok
+       && ((classified 90).withTests 300 |>.withCoverFrom 300
+         |>.report (Seed.ofNat 0)).run.status == .uncovered),
+   ("a run too short for its minimums still counts its classes",
+     countOf ((classified 90).withTests 30 |>.withCoverFrom 100
+       |>.report (Seed.ofNat 0)).run "any" == some 30),
    ("exactly the minimum is enough",
      Coverage.sufficient #[⟨"a", 25, 25⟩] 100
        && !Coverage.sufficient #[⟨"a", 25, 24⟩] 100),
@@ -227,6 +235,10 @@ def rendering : List (String × Bool) := [
         ⟨"half", 50, 100⟩]⟩
     == "  ✓ p passed 200 tests.\n     50.0% half, at least 50%\n    \
       100.0% large, at least 10%\n      0.5% small"),
+  ("a minimum not asked of a short run", Report.render "p"
+      ⟨20, 0, .ok, #[⟨"rare", 10, 1⟩]⟩
+    == "  ✓ p passed 20 tests.\n      \
+      5.0% rare, at least 10% of a longer run"),
   ("insufficient coverage", Report.render "p" ⟨100, 0, .uncovered,
       #[⟨"rare", 10, 3⟩, ⟨"any", 0, 100⟩]⟩
     == "  ✗ p passed 100 tests, with insufficient coverage.\n    \

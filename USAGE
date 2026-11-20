@@ -187,7 +187,9 @@ PROPERTIES
 
     withTests, withDiscards and withShrinks set the number of tests
     (100), the discards after which the runner gives up (100), and the
-    shrinks after which it reports what it has (1000).
+    shrinks after which it reports what it has (1000).  withCoverFrom
+    sets the number of tests from which a minimum of cover is asked
+    (see COVERAGE).
 
 COVERAGE
     A property that passes may still test little: most of its cases
@@ -239,8 +241,13 @@ COVERAGE
     The share of a kind also depends on the number of tests: a run
     starts at size 0 and grows by one, so a run of 50 tests has only
     small cases, where a sequence is short and a rare kind rarer.  A
-    minimum set from a run of 1,000 can fail at 50; set it for the
-    shortest run that is made, or ask it only of long ones.
+    minimum set from a run of 1,000 can fail at 50.  withCoverFrom
+    asks the minimums only of a run that is long enough:
+
+        (sorted.withCoverFrom 500).withTests cases
+
+    A shorter run still reports each share, and says of a minimum it
+    did not reach that it is one "of a longer run".
 
 EFFECTS
     Generators are pure.  A property whose test has effects generates
@@ -533,8 +540,8 @@ PITFALLS
     - A value drawn after another that it depends on shrinks less far
       than the two drawn with Gen.zip (see Combination).
     - Gen.sequence shrinks by removing elements (see Collections).
-    - A minimum of cover depends on the number of tests (see
-      COVERAGE).
+    - A minimum of cover depends on the number of tests; ask it from
+      a number of them with withCoverFrom (see COVERAGE).
 
 DEVELOPMENT
         lake build              # Build the library.

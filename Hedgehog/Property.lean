@@ -162,6 +162,10 @@ structure PropertyConfig where
   discards : Nat := 100
   /-- Shrinks after which the runner reports what it has. -/
   shrinks : Nat := 1000
+  /-- Test cases from which a minimum of `cover` is asked.  A shorter
+  run reports the shares and requires none, since it has only small
+  cases, where a rare kind is rarer. -/
+  coverFrom : Nat := 0
   deriving Repr, BEq, Inhabited
 
 /-- A property: the generating part, which returns the part to run in
@@ -191,6 +195,11 @@ def withDiscards (n : Nat) (p : Property m) : Property m :=
 
 def withShrinks (n : Nat) (p : Property m) : Property m :=
   { p with config.shrinks := n }
+
+/-- Ask the minimums of `cover` only of a run of `n` test cases or
+more. -/
+def withCoverFrom (n : Nat) (p : Property m) : Property m :=
+  { p with config.coverFrom := n }
 
 /-- The property in a monad that `m` lifts to, so that a pure property
 and one with effects fit in one group. -/

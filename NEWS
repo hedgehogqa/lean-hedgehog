@@ -2,6 +2,10 @@ lean-hedgehog NEWS -- history of user-visible changes.
 
 0.3.0 (unreleased)
 
+  - withCoverFrom asks the minimums of cover only of a run of a number
+    of tests or more.  A shorter run has only small cases, where a
+    rare kind is rarer; every driver written for EthLib had made this
+    by hand.
   - A report lists its classes in the order of their names, which is
     the same on every run.
   - Each report is flushed as it is printed.

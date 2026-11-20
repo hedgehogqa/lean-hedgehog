@@ -161,7 +161,9 @@ def loop (p : Property m) :
     pure ⟨tests, discards, .gaveUp, coverage⟩
   | fuel + 1, tests, discards, coverage, size, seed =>
     if tests ≥ p.config.tests then
-      let status := if coverage.sufficient tests then .ok else .uncovered
+      let asked := tests ≥ p.config.coverFrom
+      let status := if !asked || coverage.sufficient tests then .ok
+        else .uncovered
       pure ⟨tests, discards, status, coverage⟩
     else if discards ≥ p.config.discards then
       pure ⟨tests, discards, .gaveUp, coverage⟩
@@ -209,6 +211,9 @@ def renderCoverage (r : Report) : String :=
     let need := if l.minimum = 0 then ""
       else if l.covered r.tests then
         s!", at least {l.minimum}%"
+      -- A run that passed below a minimum was too short to be asked it.
+      else if r.status == .ok then
+        s!", at least {l.minimum}% of a longer run"
       else s!", at least {l.minimum}% ✗"
     s!"\n    {"".pushn ' ' (6 - share.length)}{share} {l.name}{need}")
 
