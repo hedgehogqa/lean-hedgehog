@@ -244,8 +244,14 @@ section Check
 
 variable {m : Type → Type} [Monad m] [MonadLiftT m IO]
 
+/-- Print a line now: a run whose output goes to a file is watched as
+it goes. -/
+def say (text : String) : IO Unit := do
+  IO.println text
+  (← IO.getStdout).flush
+
 def finish (name : String) (r : Report) : IO Unit :=
-  if r.ok then IO.println (r.render name)
+  if r.ok then say (r.render name)
   else throw (IO.userError ("\n" ++ r.render name))
 
 /-- Check a property, print the report, and throw if it did not pass.
@@ -312,13 +318,13 @@ def checkGroup (name : String) (properties : List (String × Property m))
     (select : Selection := {}) (mustFail : Bool := false) : IO Bool := do
   let selected := properties.filter fun (name, _) => select.selects name
   if selected.isEmpty then return true
-  IO.println s!"━━━ {name} ━━━"
+  say s!"━━━ {name} ━━━"
   let mut ok := true
   for (name, p) in selected do
     let r ← match select.recheck with
       | some (size, seed) => liftM (p.recheck size seed)
       | none => liftM (p.report (← Seed.random))
-    IO.println (r.render name)
+    say (r.render name)
     let failed := match r.status with
       | .failed _ => true
       | _ => false

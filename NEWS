@@ -2,6 +2,7 @@ lean-hedgehog NEWS -- history of user-visible changes.
 
 0.3.0 (unreleased)
 
+  - Each report is flushed as it is printed.
   - Incompatible: check, apply and next of Command take the context
     first, then the command and the state, so a command that drives a
     system through a handle, or that may run at some forks only, need
