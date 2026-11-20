@@ -1,6 +1,6 @@
 name = "hedgehog"
 version = "0.3.0"
-description = "Property-based testing with integrated shrinking."
+description = "Zero-dependency property-based and state machine testing."
 keywords = ["testing", "property-based-testing", "shrinking"]
 homepage = "https://github.com/hedgehogqa/lean-hedgehog"
 license = "BSD-3-Clause"

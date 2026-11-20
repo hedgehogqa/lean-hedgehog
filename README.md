@@ -2,7 +2,7 @@
 
 <img src="img/hedgehog-logo.svg" width="128" alt="">
 
-Property-based testing for Lean 4.
+Zero-dependency property-based and state machine testing for Lean 4.
 
 ```lean
 import Hedgehog
